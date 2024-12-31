@@ -127,7 +127,8 @@ const game = {
     currentTime: 0,
     bestTime: localStorage.getItem('bestTime') || Infinity,
     ctx: null,
-    scale: 1
+    scale: 1,
+    heightScale: 1,
 };
 
 const GRAVITY = 0.5;
@@ -184,15 +185,12 @@ function loadSVGContent(svgContent) {
         maxRight = Math.max(maxRight, right);
         maxBottom = Math.max(maxBottom, bottom);
     });
+    console.log(maxRight, maxBottom);
+    console.log(validRects)
     
     // Always scale to full width, then adjust height proportionally
     game.scale = containerWidth / maxRight;
-    
-    // If scaled height would be too tall, adjust scale to fit height
-    const scaledHeight = maxBottom * game.scale;
-    if (scaledHeight > containerHeight - 100) {  // Leave space for player
-        game.scale = (containerHeight - 100) / maxBottom;
-    }
+    game.heightScale = containerHeight / maxBottom;
     
     // Scale and store blocks
     game.blocks = validRects.map(rect => {
@@ -203,9 +201,9 @@ function loadSVGContent(svgContent) {
         
         return {
             x: x * game.scale,
-            y: y * game.scale,
-            width: width * game.scale * 50,
-            height: height * game.scale,
+            y: y * game.heightScale,
+            width: width * game.scale,
+            height: height * game.heightScale,
             fill: rect.getAttribute('fill')
         };
     });
