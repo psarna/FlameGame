@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FlameGame</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        #gameContainer {
+            border: 2px solid #333;
+            margin: 20px 0;
+            width: 1024px;
+            height: 768px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-group {
+            margin: 10px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #urlInput {
+            width: 300px;
+            padding: 8px;
+            margin-right: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #ff5722;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #f4511e;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        h1 {
+            color: #ff5722;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        #stats {
+            font-size: 1.2em;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        #stats span {
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>FlameGame</h1>
+    
+    <div class="input-group">
+        <h3>Load Your Level</h3>
+        <div>
+            <h4>Option 1: From File</h4>
+            <input type="file" id="fileInput" accept=".svg">
+        </div>
+        <div>
+            <h4>Option 2: From URL</h4>
+            <input type="text" id="urlInput" placeholder="Enter SVG URL">
+            <button id="loadUrlButton">Load URL</button>
+        </div>
+    </div>
+
+    <div id="stats">
+        <span id="timer">Time: 0.0s</span>
+        <span id="bestTime">Best: --</span>
+    </div>
+    <div id="gameContainer"></div>
+    <button id="startButton" disabled>Start Game</button>
+    <div class="controls">
+        <h3>Controls:</h3>
+        <ul>
+            <li>Left/Right Arrow: Move</li>
+            <li>Space: Jump</li>
+            <li>X: Attack with machete</li>
+        </ul>
+    </div>
+
+
+    <script>
+class Game {
+    constructor() {
+        this.CONTAINER_WIDTH = 1024;
+        this.CONTAINER_HEIGHT = 768;
+        this.FLOOR_HEIGHT = 20;
+        this.PLAYER_WIDTH = 20;
+        this.PLAYER_HEIGHT = 40;
+        
+        this.playerPos = { x: 50, y: 250 };
+        this.velocity = { x: 0, y: 0 };
+        this.isJumping = false;
+        this.isAttacking = false;
+        this.facingRight = true;
+        this.destroyedBlocks = new Set();
+        this.gameStarted = false;
+        this.timer = 0;
+        this.bestTime = null;
+        this.blocks = [];
+        this.targetBlock = null;
+        this.svgNS = "http://www.w3.org/2000/svg";
+        this.scale = 1;
+        
+        this.setupGame();
+        this.setupEventListeners();
+    }
+
+    setupGame() {
+        this.svg = document.createElementNS(this.svgNS, "svg");
+        this.svg.setAttribute("width", this.CONTAINER_WIDTH);
+        this.svg.setAttribute("height", this.CONTAINER_HEIGHT);
+        this.svg.style.width = "100%";
+        this.svg.style.height = "100%";
+        document.getElementById("gameContainer").appendChild(this.svg);
+
+        this.gameGroup = document.createElementNS(this.svgNS, "g");
+        this.svg.appendChild(this.gameGroup);
+
+        this.player = document.createElementNS(this.svgNS, "rect");
+        this.player.setAttribute("width", this.PLAYER_WIDTH);
+        this.player.setAttribute("height", this.PLAYER_HEIGHT);
+        this.player.setAttribute("fill", "#333");
+        this.gameGroup.appendChild(this.player);
+
+        this.machete = document.createElementNS(this.svgNS, "line");
+        this.machete.setAttribute("stroke", "#666");
+        this.machete.setAttribute("stroke-width", "4");
+        this.machete.style.display = "none";
+        this.gameGroup.appendChild(this.machete);
+    }
+
+    processSVGContent(svgContent) {
+        this.blocks = [];
+        while (this.gameGroup.lastChild) {
+            this.gameGroup.removeChild(this.gameGroup.lastChild);
+        }
+        this.gameGroup.appendChild(this.player);
+        this.gameGroup.appendChild(this.machete);
+
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(svgContent, "image/svg+xml");
+        
+        if (svgDoc.getElementsByTagName("parsererror").length > 0) {
+            alert("Invalid SVG file");
+            return;
+        }
+
+        const rects = svgDoc.getElementsByTagName("rect");
+        for (let rect of rects) {
+            if (rect.getAttribute("width") == "100%") continue;
+            
+            const block = {
+                id: 'block_' + this.blocks.length,
+                x: parseFloat(rect.getAttribute("x")),
+                y: parseFloat(rect.getAttribute("y")),
+                width: parseFloat(rect.getAttribute("width")),
+                height: parseFloat(rect.getAttribute("height")),
+                color: rect.getAttribute("fill") || "#ccc"
+            };
+            this.blocks.push(block);
+        }
+
+        // Only proceed if we found any valid blocks
+        if (this.blocks.length === 0) {
+            alert("No valid blocks found in SVG");
+            return;
+        }
+
+        // Add floor separately - not affected by SVG scaling
+        const floor = {
+            id: 'floor',
+            x: 0,
+            y: this.CONTAINER_HEIGHT - this.FLOOR_HEIGHT,
+            width: this.CONTAINER_WIDTH,
+            height: this.FLOOR_HEIGHT,
+            color: '#eee'
+        };
+        this.blocks.push(floor);
+       
+        this.blocks.forEach(block => {
+            const gameRect = document.createElementNS(this.svgNS, "rect");
+            gameRect.setAttribute("id", block.id);
+            gameRect.setAttribute("x", block.x);
+            gameRect.setAttribute("y", block.y);
+            gameRect.setAttribute("width", block.width);
+            gameRect.setAttribute("height", block.height);
+            gameRect.setAttribute("fill", block.color);
+            gameRect.setAttribute("stroke", "#000");
+            
+            this.gameGroup.insertBefore(gameRect, this.player);
+        });
+
+        document.getElementById("startButton").disabled = false;
+    }
+
+    updateVisuals() {
+        this.player.setAttribute("x", this.playerPos.x);
+        this.player.setAttribute("y", this.playerPos.y);
+
+        if (this.isAttacking) {
+            const attackOffset = this.facingRight ? this.PLAYER_WIDTH : 0;
+            const attackLength = this.facingRight ? 20 : -20;
+            
+            this.machete.setAttribute("x1", this.playerPos.x + attackOffset);
+            this.machete.setAttribute("y1", this.playerPos.y + this.PLAYER_HEIGHT/2);
+            this.machete.setAttribute("x2", this.playerPos.x + attackOffset + attackLength);
+            this.machete.setAttribute("y2", this.playerPos.y + this.PLAYER_HEIGHT/2);
+            this.machete.style.display = "block";
+        } else {
+            this.machete.style.display = "none";
+        }
+    }
+
+    async loadFromUrl(url) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const svgText = await response.text();
+            this.processSVGContent(svgText);
+        } catch (error) {
+            alert('Error loading SVG from URL: ' + error.message);
+        }
+    }
+
+    loadFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this.processSVGContent(e.target.result);
+        };
+        reader.onerror = (error) => {
+            alert('Error loading SVG file: ' + error);
+        };
+        reader.readAsText(file);
+    }
+
+    startGame() {
+        this.playerPos = { x: 50, y: 250 };
+        this.velocity = { x: 0, y: 0 };
+        this.isJumping = false;
+        this.isAttacking = false;
+        this.facingRight = true;
+        this.destroyedBlocks.clear();
+        this.timer = 0;
+        
+        const playableBlocks = this.blocks.filter(b => b.id !== 'floor');
+        const randomBlock = playableBlocks[Math.floor(Math.random() * playableBlocks.length)];
+        this.targetBlock = randomBlock.id;
+        
+        const targetElement = document.getElementById(this.targetBlock);
+        targetElement.setAttribute("fill", "#ff0000");
+        
+        this.gameStarted = true;
+        this.gameLoop();
+    }
+
+    gameLoop() {
+        if (!this.gameStarted) return;
+
+        this.timer += 0.016;
+        document.getElementById("timer").textContent = `Time: ${this.timer.toFixed(1)}s`;
+
+        this.velocity.y = Math.min(this.velocity.y + 0.5, 10);
+
+        const newPos = {
+            x: this.playerPos.x + this.velocity.x,
+            y: this.playerPos.y + this.velocity.y
+        };
+
+        let onGround = false;
+        this.blocks.forEach(block => {
+            if (this.destroyedBlocks.has(block.id)) return;
+
+            if (newPos.x + this.PLAYER_WIDTH > block.x && 
+                newPos.x < block.x + block.width &&
+                newPos.y + this.PLAYER_HEIGHT > block.y && 
+                newPos.y < block.y + block.height) {
+                
+                if (this.velocity.y > 0) {
+                    newPos.y = block.y - this.PLAYER_HEIGHT;
+                    this.velocity.y = 0;
+                    this.isJumping = false;
+                    onGround = true;
+                }
+            }
+        });
+
+        newPos.x = Math.max(0, Math.min(newPos.x, this.CONTAINER_WIDTH - this.PLAYER_WIDTH));
+        this.playerPos = newPos;
+
+        this.updateVisuals();
+
+        requestAnimationFrame(() => this.gameLoop());
+    }
+
+    attack() {
+        const attackRange = { 
+            x: this.playerPos.x + (this.facingRight ? this.PLAYER_WIDTH : 0), 
+            y: this.playerPos.y + this.PLAYER_HEIGHT/2 
+        };
+
+        this.blocks.forEach(block => {
+            if (block.id === 'floor' || this.destroyedBlocks.has(block.id)) return;
+            
+            if (attackRange.x > block.x && 
+                attackRange.x < block.x + block.width &&
+                attackRange.y > block.y && 
+                attackRange.y < block.y + block.height) {
+                
+                this.destroyedBlocks.add(block.id);
+                const blockElement = document.getElementById(block.id);
+                blockElement.style.display = 'none';
+                
+                if (block.id === this.targetBlock) {
+                    if (!this.bestTime || this.timer < this.bestTime) {
+                        this.bestTime = this.timer;
+                        document.getElementById("bestTime").textContent = 
+                            `Best: ${this.bestTime.toFixed(1)}s`;
+                    }
+                    this.gameStarted = false;
+                    alert(`Level completed in ${this.timer.toFixed(1)} seconds!`);
+                }
+            }
+        });
+
+        setTimeout(() => {
+            this.isAttacking = false;
+        }, 200);
+    }
+
+    setupEventListeners() {
+        document.getElementById("fileInput").addEventListener("change", (e) => {
+            if (e.target.files[0]) {
+                this.loadFromFile(e.target.files[0]);
+            }
+        });
+
+        document.getElementById("loadUrlButton").addEventListener("click", () => {
+            const url = document.getElementById("urlInput").value.trim();
+            if (url) {
+                this.loadFromUrl(url);
+            } else {
+                alert("Please enter a URL");
+            }
+        });
+
+        document.getElementById("startButton").addEventListener("click", () => {
+            this.startGame();
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (!this.gameStarted) return;
+            
+            switch (e.key) {
+                case "ArrowLeft":
+                    this.velocity.x = -5;
+                    this.facingRight = false;
+                    break;
+                case "ArrowRight":
+                    this.velocity.x = 5;
+                    this.facingRight = true;
+                    break;
+                case " ":
+                    e.preventDefault();
+                    if (!this.isJumping) {
+                        this.velocity.y = -10;
+                        this.isJumping = true;
+                    }
+                    break;
+                case "x":
+                    if (!this.isAttacking) {
+                        this.isAttacking = true;
+                        this.attack();
+                    }
+                    break;
+            }
+        });
+
+        document.addEventListener("keyup", (e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                this.velocity.x = 0;
+            }
+        });
+    }
+}
+
+window.onload = () => {
+    new Game();
+};
+    </script>
+</body>
+</html>
