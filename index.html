@@ -105,305 +105,354 @@
             <li>X: Attack with machete</li>
         </ul>
     </div>
-
-
     <script>
-class Game {
-    constructor() {
-        this.CONTAINER_WIDTH = 1024;
-        this.CONTAINER_HEIGHT = 768;
-        this.PLAYER_WIDTH = 20;
-        this.PLAYER_HEIGHT = 40;
+// Game state
+const game = {
+    player: {
+        x: 100,
+        y: 100,
+        width: 30,
+        height: 50,
+        velX: 0,
+        velY: 0,
+        isJumping: false,
+        isAttacking: false,
+        facingRight: true,  // Add facing direction
+        attackTimeout: null
+    },
+    blocks: [],
+    keys: {},
+    isRunning: false,
+    startTime: 0,
+    currentTime: 0,
+    bestTime: localStorage.getItem('bestTime') || Infinity,
+    ctx: null,
+    scale: 1
+};
 
-        this.playerPos = { x: 50, y: 250 };
-        this.velocity = { x: 0, y: 0 };
-        this.isJumping = false;
-        this.isAttacking = false;
-        this.facingRight = true;
-        this.destroyedBlocks = new Set();
-        this.timer = 0;
-        this.bestTime = null;
-        this.blocks = [];
-        this.targetBlock = null;
-        this.gameStarted = false;
+const GRAVITY = 0.5;
+const JUMP_FORCE = -10;
+const MOVE_SPEED = 5;
+const ATTACK_DURATION = 200;
 
-        this.svgNS = "http://www.w3.org/2000/svg";
+// Default flame graph SVG
+const defaultSVG = `
+<svg width="1200" height="300">
+    <rect x="10" y="250" width="1180" height="50" fill="#ff7f00"/>
+    <rect x="100" y="200" width="400" height="50" fill="#ff9f00"/>
+    <rect x="600" y="200" width="300" height="50" fill="#ffbf00"/>
+    <rect x="150" y="150" width="200" height="50" fill="#ffdf00"/>
+    <rect x="650" y="150" width="150" height="50" fill="#ffff00"/>
+</svg>`;
 
-        this.setupGame();
-        this.setupEventListeners();
+// Initialize game
+function init() {
+    const container = document.getElementById('gameContainer');
+    container.innerHTML = '';
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    container.appendChild(canvas);
+    
+    game.ctx = canvas.getContext('2d');
+    setupEventListeners();
+    
+    // Load default flame graph
+    loadSVGContent(defaultSVG);
+    
+    return game.ctx;
+}
+
+function loadSVGContent(svgContent) {
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const rects = Array.from(svgDoc.querySelectorAll('rect'));
+    
+    // Skip rects with width="100%"
+    const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%');
+    
+    const containerWidth = game.ctx.canvas.width;
+    const containerHeight = game.ctx.canvas.height;
+    
+    // Find the boundaries of the SVG content
+    let maxRight = 0;
+    let maxBottom = 0;
+    validRects.forEach(rect => {
+        const right = parseFloat(rect.getAttribute('x')) + parseFloat(rect.getAttribute('width'));
+        const bottom = parseFloat(rect.getAttribute('y')) + parseFloat(rect.getAttribute('height'));
+        maxRight = Math.max(maxRight, right);
+        maxBottom = Math.max(maxBottom, bottom);
+    });
+    
+    // Always scale to full width, then adjust height proportionally
+    game.scale = containerWidth / maxRight;
+    
+    // If scaled height would be too tall, adjust scale to fit height
+    const scaledHeight = maxBottom * game.scale;
+    if (scaledHeight > containerHeight - 100) {  // Leave space for player
+        game.scale = (containerHeight - 100) / maxBottom;
     }
+    
+    // Scale and store blocks
+    game.blocks = validRects.map(rect => {
+        const x = parseFloat(rect.getAttribute('x'));
+        const y = parseFloat(rect.getAttribute('y'));
+        const width = parseFloat(rect.getAttribute('width'));
+        const height = parseFloat(rect.getAttribute('height'));
+        
+        return {
+            x: x * game.scale,
+            y: y * game.scale,
+            width: width * game.scale * 50,
+            height: height * game.scale,
+            fill: rect.getAttribute('fill')
+        };
+    });
 
-    setupGame() {
-        const container = document.getElementById("gameContainer");
-
-        this.svg = document.createElementNS(this.svgNS, "svg");
-        this.svg.setAttribute("width", this.CONTAINER_WIDTH);
-        this.svg.setAttribute("height", this.CONTAINER_HEIGHT);
-        this.svg.setAttribute("viewBox", `0 0 ${this.CONTAINER_WIDTH} ${this.CONTAINER_HEIGHT}`);
-        container.appendChild(this.svg);
-
-        this.gameGroup = document.createElementNS(this.svgNS, "g");
-        this.svg.appendChild(this.gameGroup);
-
-        this.player = document.createElementNS(this.svgNS, "rect");
-        this.player.setAttribute("width", this.PLAYER_WIDTH);
-        this.player.setAttribute("height", this.PLAYER_HEIGHT);
-        this.player.setAttribute("fill", "#333");
-        this.player.setAttribute("x", this.playerPos.x);
-        this.player.setAttribute("y", this.playerPos.y);
-        this.gameGroup.appendChild(this.player);
-
-        this.machete = document.createElementNS(this.svgNS, "line");
-        this.machete.setAttribute("stroke", "#666");
-        this.machete.setAttribute("stroke-width", "4");
-        this.machete.style.display = "none";
-        this.gameGroup.appendChild(this.machete);
-    }
-
-    processSVGContent(svgContent) {
-        const parser = new DOMParser();
-        const svgDoc = parser.parseFromString(svgContent, "image/svg+xml");
-
-        if (svgDoc.getElementsByTagName("parsererror").length > 0) {
-            alert("Invalid SVG file");
-            return;
-        }
-
-        const importedContent = svgDoc.documentElement;
-
-        // Clear previous content
-        while (this.gameGroup.firstChild) {
-            this.gameGroup.removeChild(this.gameGroup.firstChild);
-        }
-
-        // Add the imported SVG
-        const importedNodes = Array.from(importedContent.childNodes);
-        importedNodes.forEach((node) => {
-            const clonedNode = node.cloneNode(true);
-            this.gameGroup.appendChild(clonedNode);
-        });
-
-        // Re-add the player
-        this.gameGroup.appendChild(this.player);
-        this.player.setAttribute("x", this.playerPos.x);
-        this.player.setAttribute("y", this.playerPos.y);
-
-        document.getElementById("startButton").disabled = false;
-    }
+    // Reset player position
+    game.player.x = 50;
+    game.player.y = 0;
+    game.player.velX = 0;
+    game.player.velY = 0;
+    
+    document.getElementById('startButton').disabled = false;
+    render();
+}
 
 
-    updateVisuals() {
-        this.player.setAttribute("x", this.playerPos.x);
-        this.player.setAttribute("y", this.playerPos.y);
-
-        if (this.isAttacking) {
-            const attackOffset = this.facingRight ? this.PLAYER_WIDTH : 0;
-            const attackLength = this.facingRight ? 20 : -20;
-            
-            this.machete.setAttribute("x1", this.playerPos.x + attackOffset);
-            this.machete.setAttribute("y1", this.playerPos.y + this.PLAYER_HEIGHT/2);
-            this.machete.setAttribute("x2", this.playerPos.x + attackOffset + attackLength);
-            this.machete.setAttribute("y2", this.playerPos.y + this.PLAYER_HEIGHT/2);
-            this.machete.style.display = "block";
+// Load SVG from file or URL
+async function loadSVG(source, isUrl = false) {
+    try {
+        let svgText;
+        if (isUrl) {
+            const response = await fetch(source);
+            svgText = await response.text();
         } else {
-            this.machete.style.display = "none";
+            svgText = await source.text();
         }
-    }
-
-    async loadFromUrl(url) {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const svgText = await response.text();
-            this.processSVGContent(svgText);
-        } catch (error) {
-            alert('Error loading SVG from URL: ' + error.message);
-        }
-    }
-
-    loadFromFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            this.processSVGContent(e.target.result);
-        };
-        reader.onerror = (error) => {
-            alert('Error loading SVG file: ' + error);
-        };
-        reader.readAsText(file);
-    }
-
-    startGame() {
-        this.playerPos = { x: 50, y: 250 };
-        this.velocity = { x: 0, y: 0 };
-        this.isJumping = false;
-        this.isAttacking = false;
-        this.facingRight = true;
-        this.destroyedBlocks.clear();
-        this.timer = 0;
-        /*
-        const playableBlocks = this.blocks.filter(b => b.id !== 'floor');
-        const randomBlock = playableBlocks[Math.floor(Math.random() * playableBlocks.length)];
-        this.targetBlock = randomBlock.id;
-        
-        const targetElement = document.getElementById(this.targetBlock);
-        targetElement.setAttribute("fill", "#ff0000");*/
-        
-        this.gameStarted = true;
-        this.gameLoop();
-    }
-
-    gameLoop() {
-        if (!this.gameStarted) return;
-
-        this.timer += 0.016;
-        document.getElementById("timer").textContent = `Time: ${this.timer.toFixed(1)}s`;
-
-        this.velocity.y = Math.min(this.velocity.y + 0.5, 10);
-
-        const newPos = {
-            x: this.playerPos.x + this.velocity.x,
-            y: this.playerPos.y + this.velocity.y
-        };
-
-        let onGround = false;
-        this.blocks.forEach(block => {
-            if (this.destroyedBlocks.has(block.id)) return;
-
-            if (newPos.x + this.PLAYER_WIDTH > block.x && 
-                newPos.x < block.x + block.width &&
-                newPos.y + this.PLAYER_HEIGHT > block.y && 
-                newPos.y < block.y + block.height) {
-                
-                if (this.velocity.y > 0) {
-                    newPos.y = block.y - this.PLAYER_HEIGHT;
-                    this.velocity.y = 0;
-                    this.isJumping = false;
-                    onGround = true;
-                }
-            }
-        });
-
-        newPos.x = Math.max(0, Math.min(newPos.x, this.CONTAINER_WIDTH - this.PLAYER_WIDTH));
-        this.playerPos = newPos;
-
-        this.updateVisuals();
-
-        requestAnimationFrame(() => this.gameLoop());
-    }
-
-    attack() {
-        const attackRange = { 
-            x: this.playerPos.x + (this.facingRight ? this.PLAYER_WIDTH : 0), 
-            y: this.playerPos.y + this.PLAYER_HEIGHT/2 
-        };
-
-        this.blocks.forEach(block => {
-            if (block.id === 'floor' || this.destroyedBlocks.has(block.id)) return;
-            
-            if (attackRange.x > block.x && 
-                attackRange.x < block.x + block.width &&
-                attackRange.y > block.y && 
-                attackRange.y < block.y + block.height) {
-                
-                this.destroyedBlocks.add(block.id);
-                const blockElement = document.getElementById(block.id);
-                blockElement.style.display = 'none';
-                
-                if (block.id === this.targetBlock) {
-                    if (!this.bestTime || this.timer < this.bestTime) {
-                        this.bestTime = this.timer;
-                        document.getElementById("bestTime").textContent = 
-                            `Best: ${this.bestTime.toFixed(1)}s`;
-                    }
-                    this.gameStarted = false;
-                    alert(`Level completed in ${this.timer.toFixed(1)} seconds!`);
-                }
-            }
-        });
-
-        setTimeout(() => {
-            this.isAttacking = false;
-        }, 200);
-    }
-
-    setupEventListeners() {
-        document.getElementById("fileInput").addEventListener("change", (e) => {
-            if (e.target.files[0]) {
-                this.loadFromFile(e.target.files[0]);
-            }
-        });
-
-        document.getElementById("loadUrlButton").addEventListener("click", () => {
-            const url = document.getElementById("urlInput").value.trim();
-            if (url) {
-                this.loadFromUrl(url);
-            } else {
-                alert("Please enter a URL");
-            }
-        });
-
-        document.getElementById("startButton").addEventListener("click", () => {
-            this.startGame();
-        });
-
-        document.addEventListener("keydown", (e) => {
-            if (!this.gameStarted) return;
-            
-            switch (e.key) {
-                case "ArrowLeft":
-                    this.velocity.x = -5;
-                    this.facingRight = false;
-                    break;
-                case "ArrowRight":
-                    this.velocity.x = 5;
-                    this.facingRight = true;
-                    break;
-                case " ":
-                    e.preventDefault();
-                    if (!this.isJumping) {
-                        this.velocity.y = -10;
-                        this.isJumping = true;
-                    }
-                    break;
-                case "x":
-                    if (!this.isAttacking) {
-                        this.isAttacking = true;
-                        this.attack();
-                    }
-                    break;
-            }
-        });
-
-        document.addEventListener("keyup", (e) => {
-            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                this.velocity.x = 0;
-            }
-        });
+        loadSVGContent(svgText);
+    } catch (error) {
+        console.error('Error loading SVG:', error);
     }
 }
 
-window.onload = () => {
-    const game = new Game();
-
-    document.getElementById("fileInput").addEventListener("change", function (event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => game.processSVGContent(e.target.result);
-            reader.readAsText(file);
+// Event Listeners
+function setupEventListeners() {
+    window.addEventListener('keydown', e => {
+        game.keys[e.key] = true;
+        if (e.key === ' ' || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
         }
     });
-
-    document.getElementById("urlInput").addEventListener("change", function () {
-        const url = document.getElementById("urlInput").value;
-        fetch(url)
-            .then((response) => response.text())
-            .then((svgContent) => game.processSVGContent(svgContent))
-            .catch((error) => alert("Failed to load SVG: " + error.message));
+    
+    window.addEventListener('keyup', e => {
+        game.keys[e.key] = false;
     });
-};
+    
+    document.getElementById('fileInput').addEventListener('change', e => {
+        if (e.target.files[0]) {
+            loadSVG(e.target.files[0]);
+        }
+    });
+    
+    document.getElementById('loadUrlButton').addEventListener('click', () => {
+        const url = document.getElementById('urlInput').value;
+        if (url) {
+            loadSVG(url, true);
+        }
+    });
+    
+    document.getElementById('startButton').addEventListener('click', startGame);
+}
+
+// Game loop
+function gameLoop() {
+    if (!game.isRunning) return;
+
+    updatePlayer();
+    checkCollisions();
+    render();
+    updateTimer();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+function updatePlayer() {
+    // Horizontal movement
+    if (game.keys['ArrowLeft']) {
+        game.player.velX = -MOVE_SPEED;
+        game.player.facingRight = false;  // Update facing direction
+    }
+    else if (game.keys['ArrowRight']) {
+        game.player.velX = MOVE_SPEED;
+        game.player.facingRight = true;  // Update facing direction
+    }
+    else game.player.velX = 0;
+
+    // Jumping
+    if (game.keys[' '] && !game.player.isJumping) {
+        game.player.velY = JUMP_FORCE;
+        game.player.isJumping = true;
+    }
+
+    // Attacking
+    if (game.keys['x'] && !game.player.isAttacking) {
+        game.player.isAttacking = true;
+        attackWithMachete();
+        setTimeout(() => {
+            game.player.isAttacking = false;
+        }, ATTACK_DURATION);
+    }
+
+    // Apply physics
+    game.player.velY += GRAVITY;
+    game.player.x += game.player.velX;
+    game.player.y += game.player.velY;
+
+    // Keep player in bounds
+    if (game.player.x < 0) game.player.x = 0;
+    if (game.player.x + game.player.width > game.ctx.canvas.width) {
+        game.player.x = game.ctx.canvas.width - game.player.width;
+    }
+}
+
+function checkCollisions() {
+    game.player.isJumping = true;
+    
+    // Check floor collision first
+    const floorY = game.ctx.canvas.height - game.player.height;
+    if (game.player.y > floorY) {
+        game.player.y = floorY;
+        game.player.velY = 0;
+        game.player.isJumping = false;
+    }
+    
+    // Check block collisions
+    for (const block of game.blocks) {
+        if (game.player.x < block.x + block.width &&
+            game.player.x + game.player.width > block.x &&
+            game.player.y + game.player.height > block.y &&
+            game.player.y < block.y + block.height) {
+            
+            // Ground collision
+            if (game.player.velY > 0 && game.player.y + game.player.height - game.player.velY <= block.y) {
+                game.player.y = block.y - game.player.height;
+                game.player.velY = 0;
+                game.player.isJumping = false;
+            }
+            // Ceiling collision
+            else if (game.player.velY < 0 && game.player.y - game.player.velY >= block.y + block.height) {
+                game.player.y = block.y + block.height;
+                game.player.velY = 0;
+            }
+            // Wall collision
+            else if (game.player.velX !== 0) {
+                if (game.player.velX > 0) {
+                    game.player.x = block.x - game.player.width;
+                } else {
+                    game.player.x = block.x + block.width;
+                }
+            }
+        }
+    }
+}
+
+function attackWithMachete() {
+    const attackRange = 50;
+    const attackBox = {
+        x: game.player.facingRight ? 
+           game.player.x + game.player.width : 
+           game.player.x - attackRange,
+        y: game.player.y,
+        width: attackRange,
+        height: game.player.height
+    };
+
+    game.blocks = game.blocks.filter(block => {
+        return !(attackBox.x < block.x + block.width &&
+                attackBox.x + attackBox.width > block.x &&
+                attackBox.y < block.y + block.height &&
+                attackBox.y + attackBox.height > block.y);
+    });
+}
+
+function render() {
+    const ctx = game.ctx;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    // Draw background
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    // Draw floor
+    ctx.fillStyle = '#666';
+    ctx.fillRect(0, ctx.canvas.height - 10, ctx.canvas.width, 10);
+
+    // Draw blocks
+    game.blocks.forEach(block => {
+        ctx.fillStyle = block.fill || '#ff7f00';
+        ctx.fillRect(block.x, block.y, block.width, block.height);
+        
+        // Draw block borders
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.strokeRect(block.x, block.y, block.width, block.height);
+    });
+
+    // Draw player
+    ctx.fillStyle = '#333';
+    ctx.fillRect(game.player.x, game.player.y, game.player.width, game.player.height);
+
+    // Draw attack animation if attacking
+    if (game.player.isAttacking) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+        const attackRange = 50;
+        if (game.player.facingRight) {
+            ctx.fillRect(game.player.x + game.player.width, game.player.y, attackRange, game.player.height);
+        } else {
+            ctx.fillRect(game.player.x - attackRange, game.player.y, attackRange, game.player.height);
+        }
+    }
+}
+
+// Update timer
+function updateTimer() {
+    if (game.isRunning) {
+        game.currentTime = (Date.now() - game.startTime) / 1000;
+        document.getElementById('timer').textContent = `Time: ${game.currentTime.toFixed(1)}s`;
+    }
+}
+
+// Start game
+function startGame() {
+    game.isRunning = true;
+    game.startTime = Date.now();
+    document.getElementById('startButton').textContent = 'Reset Game';
+    document.getElementById('startButton').onclick = resetGame;
+    gameLoop();
+}
+
+// Reset game
+function resetGame() {
+    game.isRunning = false;
+    if (game.currentTime < game.bestTime) {
+        game.bestTime = game.currentTime;
+        localStorage.setItem('bestTime', game.bestTime);
+        document.getElementById('bestTime').textContent = `Best: ${game.bestTime.toFixed(1)}s`;
+    }
+    init();
+    document.getElementById('startButton').textContent = 'Start Game';
+    document.getElementById('startButton').onclick = startGame;
+}
+
+// Initialize the game when the page loads
+window.addEventListener('load', () => {
+    init();
+    if (localStorage.getItem('bestTime')) {
+        document.getElementById('bestTime').textContent = 
+            `Best: ${parseFloat(localStorage.getItem('bestTime')).toFixed(1)}s`;
+    }
+});
     </script>
 </body>
 </html>
