@@ -18,7 +18,7 @@
             height: 768px;
             overflow: hidden;
             background: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
         }
         .controls {
             background: white;
@@ -112,35 +112,35 @@ class Game {
     constructor() {
         this.CONTAINER_WIDTH = 1024;
         this.CONTAINER_HEIGHT = 768;
-        this.FLOOR_HEIGHT = 20;
         this.PLAYER_WIDTH = 20;
         this.PLAYER_HEIGHT = 40;
-        
+
         this.playerPos = { x: 50, y: 250 };
         this.velocity = { x: 0, y: 0 };
         this.isJumping = false;
         this.isAttacking = false;
         this.facingRight = true;
         this.destroyedBlocks = new Set();
-        this.gameStarted = false;
         this.timer = 0;
         this.bestTime = null;
         this.blocks = [];
         this.targetBlock = null;
+        this.gameStarted = false;
+
         this.svgNS = "http://www.w3.org/2000/svg";
-        this.scale = 1;
-        
+
         this.setupGame();
         this.setupEventListeners();
     }
 
     setupGame() {
+        const container = document.getElementById("gameContainer");
+
         this.svg = document.createElementNS(this.svgNS, "svg");
         this.svg.setAttribute("width", this.CONTAINER_WIDTH);
         this.svg.setAttribute("height", this.CONTAINER_HEIGHT);
-        this.svg.style.width = "100%";
-        this.svg.style.height = "100%";
-        document.getElementById("gameContainer").appendChild(this.svg);
+        this.svg.setAttribute("viewBox", `0 0 ${this.CONTAINER_WIDTH} ${this.CONTAINER_HEIGHT}`);
+        container.appendChild(this.svg);
 
         this.gameGroup = document.createElementNS(this.svgNS, "g");
         this.svg.appendChild(this.gameGroup);
@@ -149,6 +149,8 @@ class Game {
         this.player.setAttribute("width", this.PLAYER_WIDTH);
         this.player.setAttribute("height", this.PLAYER_HEIGHT);
         this.player.setAttribute("fill", "#333");
+        this.player.setAttribute("x", this.playerPos.x);
+        this.player.setAttribute("y", this.playerPos.y);
         this.gameGroup.appendChild(this.player);
 
         this.machete = document.createElementNS(this.svgNS, "line");
@@ -159,68 +161,36 @@ class Game {
     }
 
     processSVGContent(svgContent) {
-        this.blocks = [];
-        while (this.gameGroup.lastChild) {
-            this.gameGroup.removeChild(this.gameGroup.lastChild);
-        }
-        this.gameGroup.appendChild(this.player);
-        this.gameGroup.appendChild(this.machete);
-
         const parser = new DOMParser();
         const svgDoc = parser.parseFromString(svgContent, "image/svg+xml");
-        
+
         if (svgDoc.getElementsByTagName("parsererror").length > 0) {
             alert("Invalid SVG file");
             return;
         }
 
-        const rects = svgDoc.getElementsByTagName("rect");
-        for (let rect of rects) {
-            if (rect.getAttribute("width") == "100%") continue;
-            
-            const block = {
-                id: 'block_' + this.blocks.length,
-                x: parseFloat(rect.getAttribute("x")),
-                y: parseFloat(rect.getAttribute("y")),
-                width: parseFloat(rect.getAttribute("width")),
-                height: parseFloat(rect.getAttribute("height")),
-                color: rect.getAttribute("fill") || "#ccc"
-            };
-            this.blocks.push(block);
+        const importedContent = svgDoc.documentElement;
+
+        // Clear previous content
+        while (this.gameGroup.firstChild) {
+            this.gameGroup.removeChild(this.gameGroup.firstChild);
         }
 
-        // Only proceed if we found any valid blocks
-        if (this.blocks.length === 0) {
-            alert("No valid blocks found in SVG");
-            return;
-        }
-
-        // Add floor separately - not affected by SVG scaling
-        const floor = {
-            id: 'floor',
-            x: 0,
-            y: this.CONTAINER_HEIGHT - this.FLOOR_HEIGHT,
-            width: this.CONTAINER_WIDTH,
-            height: this.FLOOR_HEIGHT,
-            color: '#eee'
-        };
-        this.blocks.push(floor);
-       
-        this.blocks.forEach(block => {
-            const gameRect = document.createElementNS(this.svgNS, "rect");
-            gameRect.setAttribute("id", block.id);
-            gameRect.setAttribute("x", block.x);
-            gameRect.setAttribute("y", block.y);
-            gameRect.setAttribute("width", block.width);
-            gameRect.setAttribute("height", block.height);
-            gameRect.setAttribute("fill", block.color);
-            gameRect.setAttribute("stroke", "#000");
-            
-            this.gameGroup.insertBefore(gameRect, this.player);
+        // Add the imported SVG
+        const importedNodes = Array.from(importedContent.childNodes);
+        importedNodes.forEach((node) => {
+            const clonedNode = node.cloneNode(true);
+            this.gameGroup.appendChild(clonedNode);
         });
+
+        // Re-add the player
+        this.gameGroup.appendChild(this.player);
+        this.player.setAttribute("x", this.playerPos.x);
+        this.player.setAttribute("y", this.playerPos.y);
 
         document.getElementById("startButton").disabled = false;
     }
+
 
     updateVisuals() {
         this.player.setAttribute("x", this.playerPos.x);
@@ -272,13 +242,13 @@ class Game {
         this.facingRight = true;
         this.destroyedBlocks.clear();
         this.timer = 0;
-        
+        /*
         const playableBlocks = this.blocks.filter(b => b.id !== 'floor');
         const randomBlock = playableBlocks[Math.floor(Math.random() * playableBlocks.length)];
         this.targetBlock = randomBlock.id;
         
         const targetElement = document.getElementById(this.targetBlock);
-        targetElement.setAttribute("fill", "#ff0000");
+        targetElement.setAttribute("fill", "#ff0000");*/
         
         this.gameStarted = true;
         this.gameLoop();
@@ -415,8 +385,26 @@ class Game {
 }
 
 window.onload = () => {
-    new Game();
+    const game = new Game();
+
+    document.getElementById("fileInput").addEventListener("change", function (event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => game.processSVGContent(e.target.result);
+            reader.readAsText(file);
+        }
+    });
+
+    document.getElementById("urlInput").addEventListener("change", function () {
+        const url = document.getElementById("urlInput").value;
+        fetch(url)
+            .then((response) => response.text())
+            .then((svgContent) => game.processSVGContent(svgContent))
+            .catch((error) => alert("Failed to load SVG: " + error.message));
+    });
 };
     </script>
 </body>
 </html>
+
