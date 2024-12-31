@@ -106,7 +106,7 @@
         </ul>
     </div>
     <script>
-// Game state
+
 const game = {
     player: {
         x: 100,
@@ -117,7 +117,8 @@ const game = {
         velY: 0,
         isJumping: false,
         isAttacking: false,
-        facingRight: true,  // Add facing direction
+        facingRight: true,
+        attackDirection: 'right', // 'right', 'left', or 'up'
         attackTimeout: null
     },
     blocks: [],
@@ -276,15 +277,26 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
+// Update player position and state
 function updatePlayer() {
     // Horizontal movement
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
-        game.player.facingRight = false;  // Update facing direction
+        game.player.facingRight = false;
+        if (game.keys['ArrowUp']) {
+            game.player.attackDirection = 'up';
+        } else {
+            game.player.attackDirection = 'left';
+        }
     }
     else if (game.keys['ArrowRight']) {
         game.player.velX = MOVE_SPEED;
-        game.player.facingRight = true;  // Update facing direction
+        game.player.facingRight = true;
+        if (game.keys['ArrowUp']) {
+            game.player.attackDirection = 'up';
+        } else {
+            game.player.attackDirection = 'right';
+        }
     }
     else game.player.velX = 0;
 
@@ -358,14 +370,34 @@ function checkCollisions() {
 
 function attackWithMachete() {
     const attackRange = 50;
-    const attackBox = {
-        x: game.player.facingRight ? 
-           game.player.x + game.player.width : 
-           game.player.x - attackRange,
-        y: game.player.y,
-        width: attackRange,
-        height: game.player.height
-    };
+    let attackBox;
+
+    switch (game.player.attackDirection) {
+        case 'up':
+            attackBox = {
+                x: game.player.x,
+                y: game.player.y - attackRange,
+                width: game.player.width,
+                height: attackRange
+            };
+            break;
+        case 'right':
+            attackBox = {
+                x: game.player.x + game.player.width,
+                y: game.player.y,
+                width: attackRange,
+                height: game.player.height
+            };
+            break;
+        case 'left':
+            attackBox = {
+                x: game.player.x - attackRange,
+                y: game.player.y,
+                width: attackRange,
+                height: game.player.height
+            };
+            break;
+    }
 
     game.blocks = game.blocks.filter(block => {
         return !(attackBox.x < block.x + block.width &&
@@ -374,6 +406,36 @@ function attackWithMachete() {
                 attackBox.y + attackBox.height > block.y);
     });
 }
+
+const playerSpriteSVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 50">
+    <!-- Body -->
+    <rect x="10" y="20" width="10" height="20" fill="#3333ff"/>
+    <!-- Head -->
+    <circle cx="15" cy="15" r="8" fill="#ffccaa"/>
+    <!-- Hair (spiky) -->
+    <path d="M10 12 L15 5 L20 12" fill="#333333"/>
+    <!-- Eyes -->
+    <circle cx="13" cy="14" r="1" fill="#000"/>
+    <circle cx="17" cy="14" r="1" fill="#000"/>
+    <!-- Scowl -->
+    <path d="M12 17 L18 17" stroke="#000" stroke-width="1"/>
+    <!-- Arms -->
+    <rect x="5" y="22" width="5" height="15" fill="#ffccaa"/>
+    <rect x="20" y="22" width="5" height="15" fill="#ffccaa"/>
+    <!-- Legs -->
+    <rect x="10" y="40" width="4" height="10" fill="#000066"/>
+    <rect x="16" y="40" width="4" height="10" fill="#000066"/>
+    <!-- Machete -->
+    <path d="M25 30 L35 30 L33 32 L25 32 Z" fill="#cccccc" class="machete"/>
+</svg>`;
+
+const playerSprite = new Image();
+playerSprite.src = 'data:image/svg+xml;base64,' + btoa(playerSpriteSVG);
+
+playerSprite.onload = function () {
+    game.startRendering();
+};
 
 function render() {
     const ctx = game.ctx;
@@ -397,18 +459,35 @@ function render() {
         ctx.strokeRect(block.x, block.y, block.width, block.height);
     });
 
-    // Draw player
-    ctx.fillStyle = '#333';
-    ctx.fillRect(game.player.x, game.player.y, game.player.width, game.player.height);
+    // Draw player sprite
+    ctx.save();
+    if (!game.player.facingRight) {
+        ctx.translate(game.player.x + game.player.width, game.player.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(playerSprite, 0, 0, game.player.width, game.player.height);
+    } else {
+        ctx.drawImage(playerSprite, game.player.x, game.player.y, game.player.width, game.player.height);
+    }
+    ctx.restore();
 
     // Draw attack animation if attacking
     if (game.player.isAttacking) {
         ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
         const attackRange = 50;
-        if (game.player.facingRight) {
-            ctx.fillRect(game.player.x + game.player.width, game.player.y, attackRange, game.player.height);
-        } else {
-            ctx.fillRect(game.player.x - attackRange, game.player.y, attackRange, game.player.height);
+        
+        switch (game.player.attackDirection) {
+            case 'up':
+                ctx.fillRect(game.player.x, game.player.y - attackRange, 
+                           game.player.width, attackRange);
+                break;
+            case 'right':
+                ctx.fillRect(game.player.x + game.player.width, game.player.y, 
+                           attackRange, game.player.height);
+                break;
+            case 'left':
+                ctx.fillRect(game.player.x - attackRange, game.player.y, 
+                           attackRange, game.player.height);
+                break;
         }
     }
 }
