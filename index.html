@@ -253,8 +253,8 @@ function init() {
     game.ctx = canvas.getContext('2d');
     setupEventListeners();
     
-    // TODO: load *one of* the default SVGs	
-    loadSVG("./default2.svg", true);
+    levels = ["./default1.svg", "./default2.svg"];
+    loadSVG(levels[Math.floor(Math.random() * levels.length)], true);
     
     return game.ctx;
 }
