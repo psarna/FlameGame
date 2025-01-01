@@ -8,37 +8,47 @@
             flex-direction: column;
             align-items: center;
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            padding: 10px;
             background: #f5f5f5;
+            min-height: 100vh;
         }
         #gameContainer {
             border: 2px solid #333;
-            margin: 20px 0;
-            width: 1024px;
-            height: 768px;
+            width: 95vw;
+            height: 80vh;
             overflow: hidden;
             background: white;
             position: relative;
         }
         .controls {
             background: white;
-            padding: 15px;
+            padding: 10px;
             border-radius: 5px;
             margin: 10px 0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 95vw;
         }
         .input-group {
-            margin: 10px 0;
-            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
             background: white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 95vw;
+        }
+        .input-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         #urlInput {
-            width: 300px;
+            flex: 1;
+            min-width: 150px;
             padding: 8px;
-            margin-right: 5px;
             border: 1px solid #ddd;
             border-radius: 4px;
         }
@@ -49,9 +59,9 @@
             padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
-            margin: 5px;
             font-weight: bold;
             transition: background 0.2s;
+            white-space: nowrap;
         }
         button:hover {
             background: #f4511e;
@@ -62,16 +72,52 @@
         }
         h1 {
             color: #ff5722;
-            font-size: 2.5em;
-            margin-bottom: 10px;
+            font-size: 2em;
+            margin: 10px 0;
         }
         #stats {
             font-size: 1.2em;
-            margin: 10px 0;
+            margin: 5px 0;
             font-weight: bold;
         }
         #stats span {
             margin: 0 10px;
+        }
+        #mobileControls {
+            display: none;
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.8);
+            padding: 10px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            margin: 5px;
+            font-size: 20px;
+            touch-action: manipulation;
+        }
+        @media (max-width: 768px) {
+            #mobileControls {
+                display: block;
+            }
+            .input-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .input-section {
+                flex-wrap: wrap;
+            }
+            #urlInput {
+                width: 100%;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
         }
     </style>
 </head>
@@ -79,15 +125,14 @@
     <h1>FlameGame</h1>
     
     <div class="input-group">
-        <h3>Load Your Level</h3>
-        <div>
-            <h4>Option 1: From File</h4>
+        <div class="input-section">
+            <label>File:</label>
             <input type="file" id="fileInput" accept=".svg">
         </div>
-        <div>
-            <h4>Option 2: From URL</h4>
+        <div class="input-section">
+            <label>URL:</label>
             <input type="text" id="urlInput" placeholder="Enter SVG URL">
-            <button id="loadUrlButton">Load URL</button>
+            <button id="loadUrlButton">Load</button>
         </div>
     </div>
 
@@ -97,12 +142,19 @@
     </div>
     <div id="gameContainer"></div>
     <button id="startButton" disabled>Start Game</button>
+    
+    <div id="mobileControls">
+        <button class="control-btn" id="leftBtn">←</button>
+        <button class="control-btn" id="jumpBtn">↑</button>
+        <button class="control-btn" id="rightBtn">→</button>
+        <button class="control-btn" id="attackBtn">X</button>
+    </div>
+
     <div class="controls">
         <h3>Controls:</h3>
         <ul>
-            <li>Left/Right Arrow: Move</li>
-            <li>Space: Jump</li>
-            <li>X: Attack with machete</li>
+            <li>Desktop: Arrow Keys to Move, Space to Jump, X to Attack</li>
+            <li>Mobile: On-screen buttons</li>
         </ul>
     </div>
     <script>
@@ -133,8 +185,8 @@ const game = {
 };
 
 const GRAVITY = 0.5;
-const JUMP_FORCE = -10;
-const MOVE_SPEED = 5;
+const JUMP_FORCE = -16;
+const MOVE_SPEED = 6;
 const ATTACK_DURATION = 200;
 
 // Default flame graph SVG
@@ -208,15 +260,10 @@ function loadSVGContent(svgContent) {
             fill: rect.getAttribute('fill')
         };
     });
-
-    // Reset player position
-    game.player.x = 50;
-    game.player.y = 0;
-    game.player.velX = 0;
-    game.player.velY = 0;
-    
+   
     document.getElementById('startButton').disabled = false;
     render();
+    startGame();
 }
 
 
@@ -408,27 +455,39 @@ function attackWithMachete() {
 }
 
 const playerSpriteSVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 50">
-    <!-- Body -->
-    <rect x="10" y="20" width="10" height="20" fill="#3333ff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
     <!-- Head -->
-    <circle cx="15" cy="15" r="8" fill="#ffccaa"/>
-    <!-- Hair (spiky) -->
-    <path d="M10 12 L15 5 L20 12" fill="#333333"/>
-    <!-- Eyes -->
-    <circle cx="13" cy="14" r="1" fill="#000"/>
-    <circle cx="17" cy="14" r="1" fill="#000"/>
-    <!-- Scowl -->
-    <path d="M12 17 L18 17" stroke="#000" stroke-width="1"/>
+    <circle cx="25" cy="12" r="10" fill="#ffccaa" stroke="#000" stroke-width="1"/>
+    <!-- Facial Features -->
+    <!-- Eye -->
+    <circle cx="28" cy="12" r="2" fill="#000"/>
+    <!-- Eyebrow -->
+    <path d="M26 10 L30 10" stroke="#000" stroke-width="2"/>
+    <!-- Mouth (Scowl) -->
+    <path d="M26 14 Q28 16 30 14" stroke="#000" stroke-width="1" fill="none"/>
+    <!-- Body -->
+    <rect x="18" y="20" width="14" height="18" fill="#3333ff" stroke="#000" stroke-width="1"/>
+    <!-- Tactical Vest -->
+    <rect x="18" y="25" width="14" height="5" fill="#222222" stroke="#000" stroke-width="1"/>
+    <rect x="20" y="22" width="10" height="3" fill="#444444" stroke="#000" stroke-width="1"/>
     <!-- Arms -->
-    <rect x="5" y="22" width="5" height="15" fill="#ffccaa"/>
-    <rect x="20" y="22" width="5" height="15" fill="#ffccaa"/>
-    <!-- Legs -->
-    <rect x="10" y="40" width="4" height="10" fill="#000066"/>
-    <rect x="16" y="40" width="4" height="10" fill="#000066"/>
+    <rect x="12" y="22" width="6" height="12" fill="#ffccaa" stroke="#000" stroke-width="1"/>
+    <rect x="32" y="22" width="6" height="12" fill="#ffccaa" stroke="#000" stroke-width="1"/>
+    <!-- Arm Details -->
+    <rect x="12" y="26" width="6" height="4" fill="#666666" stroke="#000" stroke-width="1"/>
+    <rect x="32" y="26" width="6" height="4" fill="#666666" stroke="#000" stroke-width="1"/>
     <!-- Machete -->
-    <path d="M25 30 L35 30 L33 32 L25 32 Z" fill="#cccccc" class="machete"/>
-</svg>`;
+    <path d="M35 35 L50 33 L48 36 L35 38 Z" fill="#cccccc" stroke="#000" stroke-width="1"/>
+    <!-- Machete Handle -->
+    <rect x="34" y="34" width="3" height="6" fill="#000" stroke="#000" stroke-width="1"/>
+    <!-- Legs -->
+    <rect x="20" y="38" width="5" height="12" fill="#444444" stroke="#000" stroke-width="1"/>
+    <rect x="25" y="38" width="5" height="12" fill="#444444" stroke="#000" stroke-width="1"/>
+    <!-- Boots -->
+    <rect x="20" y="48" width="5" height="2" fill="#222222" stroke="#000" stroke-width="1"/>
+    <rect x="25" y="48" width="5" height="2" fill="#222222" stroke="#000" stroke-width="1"/>
+</svg>
+`;
 
 const playerSprite = new Image();
 playerSprite.src = 'data:image/svg+xml;base64,' + btoa(playerSpriteSVG);
@@ -472,23 +531,56 @@ function render() {
 
     // Draw attack animation if attacking
     if (game.player.isAttacking) {
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
         const attackRange = 50;
+
+        ctx.save();
+        ctx.translate(game.player.x + game.player.width / 2, game.player.y + game.player.height / 2);
         
+        // Determine direction of attack
+        let rotation = 0;
         switch (game.player.attackDirection) {
             case 'up':
-                ctx.fillRect(game.player.x, game.player.y - attackRange, 
-                           game.player.width, attackRange);
+                rotation = -Math.PI / 2; // Rotate slash upward
                 break;
             case 'right':
-                ctx.fillRect(game.player.x + game.player.width, game.player.y, 
-                           attackRange, game.player.height);
+                rotation = 0; // Default slash direction
                 break;
             case 'left':
-                ctx.fillRect(game.player.x - attackRange, game.player.y, 
-                           attackRange, game.player.height);
+                rotation = Math.PI; // Rotate slash to the left
+                break;
+            case 'down':
+                rotation = Math.PI / 2; // Rotate slash downward
                 break;
         }
+        ctx.rotate(rotation);
+
+        // Draw the comic-style slash
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.4)'; // Slash glow
+        ctx.beginPath();
+        ctx.moveTo(-attackRange, 0);
+        ctx.quadraticCurveTo(0, -attackRange, attackRange, 0);
+        ctx.quadraticCurveTo(0, attackRange, -attackRange, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#ff0000'; // Slash edge
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-attackRange, 0);
+        ctx.quadraticCurveTo(0, -attackRange, attackRange, 0);
+        ctx.stroke();
+
+        // Add speed lines
+        ctx.strokeStyle = '#ffcccc';
+        ctx.lineWidth = 2;
+        for (let i = -attackRange / 2; i <= attackRange / 2; i += attackRange / 4) {
+            ctx.beginPath();
+            ctx.moveTo(i, -10);
+            ctx.lineTo(i + 10, -20);
+            ctx.stroke();
+        }
+
+        ctx.restore();
     }
 }
 
@@ -504,6 +596,13 @@ function updateTimer() {
 function startGame() {
     game.isRunning = true;
     game.startTime = Date.now();
+
+    // Reset player position
+    game.player.x = 50;
+    game.player.y = 0;
+    game.player.velX = 0;
+    game.player.velY = 0;
+
     document.getElementById('startButton').textContent = 'Reset Game';
     document.getElementById('startButton').onclick = resetGame;
     gameLoop();
