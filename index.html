@@ -189,16 +189,6 @@ const JUMP_FORCE = -16;
 const MOVE_SPEED = 6;
 const ATTACK_DURATION = 200;
 
-// Default flame graph SVG
-const defaultSVG = `
-<svg width="1200" height="300">
-    <rect x="10" y="250" width="1180" height="50" fill="#ff7f00"/>
-    <rect x="100" y="200" width="400" height="50" fill="#ff9f00"/>
-    <rect x="600" y="200" width="300" height="50" fill="#ffbf00"/>
-    <rect x="150" y="150" width="200" height="50" fill="#ffdf00"/>
-    <rect x="650" y="150" width="150" height="50" fill="#ffff00"/>
-</svg>`;
-
 // Initialize game
 function init() {
     const container = document.getElementById('gameContainer');
@@ -213,7 +203,7 @@ function init() {
     setupEventListeners();
     
     // Load default flame graph
-    loadSVGContent(defaultSVG);
+    loadSVG("./default.svg", true);
     
     return game.ctx;
 }
@@ -327,6 +317,7 @@ function gameLoop() {
 // Update player position and state
 function updatePlayer() {
     // Horizontal movement
+    console.log("up", game.keys);
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
         game.player.facingRight = false;
@@ -335,8 +326,7 @@ function updatePlayer() {
         } else {
             game.player.attackDirection = 'left';
         }
-    }
-    else if (game.keys['ArrowRight']) {
+    } else if (game.keys['ArrowRight']) {
         game.player.velX = MOVE_SPEED;
         game.player.facingRight = true;
         if (game.keys['ArrowUp']) {
@@ -344,8 +334,11 @@ function updatePlayer() {
         } else {
             game.player.attackDirection = 'right';
         }
+    } else if (game.keys['ArrowUp']) {
+        game.player.attackDirection = 'up';
     }
     else game.player.velX = 0;
+    console.log("attackDirection", game.player.attackDirection);
 
     // Jumping
     if (game.keys[' '] && !game.player.isJumping) {
@@ -456,36 +449,42 @@ function attackWithMachete() {
 
 const playerSpriteSVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
-    <!-- Head -->
-    <circle cx="25" cy="12" r="10" fill="#ffccaa" stroke="#000" stroke-width="1"/>
+    <!-- Head (Profile View) -->
+    <rect x="14" y="5" width="20" height="20" rx="4" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
+    <!-- Hair -->
+    <path d="M14 5 Q25 -5 34 8 Q34 10 28 8 Q24 9 14 10 Z" fill="#6b4423" stroke="#000" stroke-width="1.5"/>
     <!-- Facial Features -->
     <!-- Eye -->
-    <circle cx="28" cy="12" r="2" fill="#000"/>
+    <rect x="28" y="12" width="3" height="3" fill="#000"/>
     <!-- Eyebrow -->
-    <path d="M26 10 L30 10" stroke="#000" stroke-width="2"/>
-    <!-- Mouth (Scowl) -->
-    <path d="M26 14 Q28 16 30 14" stroke="#000" stroke-width="1" fill="none"/>
-    <!-- Body -->
-    <rect x="18" y="20" width="14" height="18" fill="#3333ff" stroke="#000" stroke-width="1"/>
-    <!-- Tactical Vest -->
-    <rect x="18" y="25" width="14" height="5" fill="#222222" stroke="#000" stroke-width="1"/>
-    <rect x="20" y="22" width="10" height="3" fill="#444444" stroke="#000" stroke-width="1"/>
-    <!-- Arms -->
-    <rect x="12" y="22" width="6" height="12" fill="#ffccaa" stroke="#000" stroke-width="1"/>
-    <rect x="32" y="22" width="6" height="12" fill="#ffccaa" stroke="#000" stroke-width="1"/>
-    <!-- Arm Details -->
-    <rect x="12" y="26" width="6" height="4" fill="#666666" stroke="#000" stroke-width="1"/>
-    <rect x="32" y="26" width="6" height="4" fill="#666666" stroke="#000" stroke-width="1"/>
-    <!-- Machete -->
-    <path d="M35 35 L50 33 L48 36 L35 38 Z" fill="#cccccc" stroke="#000" stroke-width="1"/>
-    <!-- Machete Handle -->
-    <rect x="34" y="34" width="3" height="6" fill="#000" stroke="#000" stroke-width="1"/>
+    <path d="M28 10 Q30 8 32 10" stroke="#000" stroke-width="1.5" fill="none"/>
+    <!-- Nose -->
+    <path d="M32 14 Q35 15 32 17" stroke="#000" stroke-width="1.5" fill="none"/>
+    <!-- Mouth -->
+    <path d="M30 18 Q33 20 32 22" stroke="#000" stroke-width="1.5" fill="none"/>
+    <!-- Chin -->
+    <path d="M32 22 Q34 24 30 25" stroke="#000" stroke-width="1" fill="none"/>
+    <!-- Body (Sturdy and Bulky) -->
+    <rect x="18" y="25" width="14" height="20" fill="#3a79ff" stroke="#000" stroke-width="1.5"/>
+    <!-- Chest Definition -->
+    <path d="M19 26 Q25 22 31 26" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
+    <!-- Abs -->
+    <path d="M21 28 L21 40 M27 28 L27 40" stroke="#000" stroke-width="1"/>
+    <!-- Belt -->
+    <rect x="18" y="40" width="14" height="2" fill="#222" stroke="#000" stroke-width="1.5"/>
     <!-- Legs -->
-    <rect x="20" y="38" width="5" height="12" fill="#444444" stroke="#000" stroke-width="1"/>
-    <rect x="25" y="38" width="5" height="12" fill="#444444" stroke="#000" stroke-width="1"/>
+    <rect x="20" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
+    <rect x="25" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
     <!-- Boots -->
-    <rect x="20" y="48" width="5" height="2" fill="#222222" stroke="#000" stroke-width="1"/>
-    <rect x="25" y="48" width="5" height="2" fill="#222222" stroke="#000" stroke-width="1"/>
+    <rect x="20" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
+    <rect x="25" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
+    <!-- Arms -->
+    <!-- Front Arm -->
+    <rect x="31" y="26" width="6" height="10" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
+    <rect x="31" y="34" width="6" height="4" fill="#555" stroke="#000" stroke-width="1.5"/>
+    <!-- Back Arm -->
+    <path d="M18 26 Q15 30 18 36" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
+    <path d="M16 34 Q16 36 18 38" fill="#555" stroke="#000" stroke-width="1.5"/>
 </svg>
 `;
 
@@ -493,6 +492,66 @@ const playerSprite = new Image();
 playerSprite.src = 'data:image/svg+xml;base64,' + btoa(playerSpriteSVG);
 
 playerSprite.onload = function () {
+    game.startRendering();
+};
+
+const macheteSlashSVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+  <!-- Motion blur/speed lines -->
+  <path d="M50 100 C150 30, 250 10, 360 70" 
+        stroke="#ff0000" 
+        stroke-width="6" 
+        fill="none" 
+        stroke-dasharray="10,20"/>
+  <path d="M50 110 C150 40, 250 20, 370 80" 
+        stroke="#ff9900" 
+        stroke-width="4" 
+        fill="none" 
+        stroke-dasharray="12,18"/>
+  <path d="M50 120 C150 50, 250 30, 380 90" 
+        stroke="#ffff00" 
+        stroke-width="2" 
+        fill="none" 
+        stroke-dasharray="6,12"/>
+  
+  <!-- Machete blade -->
+  <path d="M290 80 L360 70 L345 120 L275 105 Z" 
+        fill="#cfcfcf" 
+        stroke="#000000" 
+        stroke-width="3"/>
+  
+  <!-- Handle -->
+  <path d="M260 100 L290 85 L280 105 L250 120 Z" 
+        fill="#884c24" 
+        stroke="#000000" 
+        stroke-width="3"/>
+  
+  <!-- Bold Impact Lines -->
+  <path d="M350 85 L380 60" stroke="#000000" stroke-width="4"/>
+  <path d="M355 80 L385 55" stroke="#000000" stroke-width="3"/>
+  <path d="M360 75 L390 50" stroke="#000000" stroke-width="2"/>
+  
+  <!-- Impact Burst (Comic Style) -->
+  <path d="M370 65 L380 50 L390 65 L380 80 Z" 
+        fill="#ff0000" 
+        stroke="#000000" 
+        stroke-width="2"/>
+  <path d="M375 60 L385 55 L395 60 L385 65 Z" 
+        fill="#ffff00" 
+        stroke="#000000" 
+        stroke-width="1.5"/>
+  
+  <!-- Speed Effect (Dynamic Arcs) -->
+  <circle cx="380" cy="60" r="6" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+  <circle cx="390" cy="55" r="4" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+</svg>
+`;
+
+// Convert SVG to Image for Canvas
+const macheteSlashImage = new Image();
+macheteSlashImage.src = 'data:image/svg+xml;base64,' + btoa(macheteSlashSVG);
+
+macheteSlashImage.onload = function () {
     game.startRendering();
 };
 
@@ -512,7 +571,7 @@ function render() {
     game.blocks.forEach(block => {
         ctx.fillStyle = block.fill || '#ff7f00';
         ctx.fillRect(block.x, block.y, block.width, block.height);
-        
+
         // Draw block borders
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         ctx.strokeRect(block.x, block.y, block.width, block.height);
@@ -531,54 +590,35 @@ function render() {
 
     // Draw attack animation if attacking
     if (game.player.isAttacking) {
-        const attackRange = 50;
-
         ctx.save();
-        ctx.translate(game.player.x + game.player.width / 2, game.player.y + game.player.height / 2);
-        
-        // Determine direction of attack
+
+        const tileSize = 50; // Tile size
+        let slashX = game.player.x;
+        let slashY = game.player.y;
         let rotation = 0;
+
+        // Determine slash position and rotation
         switch (game.player.attackDirection) {
-            case 'up':
-                rotation = -Math.PI / 2; // Rotate slash upward
-                break;
             case 'right':
-                rotation = 0; // Default slash direction
+                slashX += game.player.width; // Slash to the right of the player
+                rotation = 0;
                 break;
             case 'left':
-                rotation = Math.PI; // Rotate slash to the left
+                slashX -= tileSize; // Slash to the left of the player
+                rotation = Math.PI; // Rotate to the left
                 break;
-            case 'down':
-                rotation = Math.PI / 2; // Rotate slash downward
+            case 'up':
+                slashY -= tileSize; // Slash above the player
+                rotation = -Math.PI / 2; // Rotate upward
                 break;
         }
+
+        // Move to slash position and rotate
+        ctx.translate(slashX + tileSize / 2, slashY + tileSize / 2);
         ctx.rotate(rotation);
 
-        // Draw the comic-style slash
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.4)'; // Slash glow
-        ctx.beginPath();
-        ctx.moveTo(-attackRange, 0);
-        ctx.quadraticCurveTo(0, -attackRange, attackRange, 0);
-        ctx.quadraticCurveTo(0, attackRange, -attackRange, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.strokeStyle = '#ff0000'; // Slash edge
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-attackRange, 0);
-        ctx.quadraticCurveTo(0, -attackRange, attackRange, 0);
-        ctx.stroke();
-
-        // Add speed lines
-        ctx.strokeStyle = '#ffcccc';
-        ctx.lineWidth = 2;
-        for (let i = -attackRange / 2; i <= attackRange / 2; i += attackRange / 4) {
-            ctx.beginPath();
-            ctx.moveTo(i, -10);
-            ctx.lineTo(i + 10, -20);
-            ctx.stroke();
-        }
+        // Draw the machete slash
+        ctx.drawImage(macheteSlashImage, -tileSize / 2, -tileSize / 2, tileSize, tileSize / 3);
 
         ctx.restore();
     }
