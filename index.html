@@ -656,6 +656,13 @@ function resetGame() {
         localStorage.setItem('bestTime', game.bestTime);
         document.getElementById('bestTime').textContent = `Best: ${game.bestTime.toFixed(1)}s`;
     }
+
+    // Reset player position
+    game.player.x = 50;
+    game.player.y = 0;
+    game.player.velX = 0;
+    game.player.velY = 0;
+
     init();
     document.getElementById('startButton').textContent = 'Start Game';
     document.getElementById('startButton').onclick = startGame;
