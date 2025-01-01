@@ -186,10 +186,9 @@ const game = {
 
 const GRAVITY = 0.5;
 const JUMP_FORCE = -16;
-const MOVE_SPEED = 6;
-const ATTACK_DURATION = 200;
+const MOVE_SPEED = 8;
+const ATTACK_DURATION = 256;
 
-// Initialize game
 function init() {
     const container = document.getElementById('gameContainer');
     container.innerHTML = '';
@@ -202,7 +201,6 @@ function init() {
     game.ctx = canvas.getContext('2d');
     setupEventListeners();
     
-    // Load default flame graph
     loadSVG("./default.svg", true);
     
     return game.ctx;
@@ -213,13 +211,11 @@ function loadSVGContent(svgContent) {
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const rects = Array.from(svgDoc.querySelectorAll('rect'));
     
-    // Skip rects with width="100%"
     const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%');
     
     const containerWidth = game.ctx.canvas.width;
     const containerHeight = game.ctx.canvas.height;
     
-    // Find the boundaries of the SVG content
     let maxRight = 0;
     let maxBottom = 0;
     validRects.forEach(rect => {
@@ -228,14 +224,10 @@ function loadSVGContent(svgContent) {
         maxRight = Math.max(maxRight, right);
         maxBottom = Math.max(maxBottom, bottom);
     });
-    console.log(maxRight, maxBottom);
-    console.log(validRects)
     
-    // Always scale to full width, then adjust height proportionally
     game.scale = containerWidth / maxRight;
     game.heightScale = containerHeight / maxBottom;
     
-    // Scale and store blocks
     game.blocks = validRects.map(rect => {
         const x = parseFloat(rect.getAttribute('x'));
         const y = parseFloat(rect.getAttribute('y'));
@@ -256,8 +248,6 @@ function loadSVGContent(svgContent) {
     startGame();
 }
 
-
-// Load SVG from file or URL
 async function loadSVG(source, isUrl = false) {
     try {
         let svgText;
@@ -273,7 +263,6 @@ async function loadSVG(source, isUrl = false) {
     }
 }
 
-// Event Listeners
 function setupEventListeners() {
     window.addEventListener('keydown', e => {
         game.keys[e.key] = true;
@@ -302,7 +291,6 @@ function setupEventListeners() {
     document.getElementById('startButton').addEventListener('click', startGame);
 }
 
-// Game loop
 function gameLoop() {
     if (!game.isRunning) return;
 
@@ -314,15 +302,14 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Update player position and state
 function updatePlayer() {
-    // Horizontal movement
-    console.log("up", game.keys);
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
         game.player.facingRight = false;
         if (game.keys['ArrowUp']) {
             game.player.attackDirection = 'up';
+        } else if (game.keys['ArrowDown']) {
+            game.player.attackDirection = 'down';
         } else {
             game.player.attackDirection = 'left';
         }
@@ -331,22 +318,23 @@ function updatePlayer() {
         game.player.facingRight = true;
         if (game.keys['ArrowUp']) {
             game.player.attackDirection = 'up';
+        } else if (game.keys['ArrowDown']) {
+            game.player.attackDirection = 'down';
         } else {
             game.player.attackDirection = 'right';
         }
     } else if (game.keys['ArrowUp']) {
         game.player.attackDirection = 'up';
+    } else if (game.keys['ArrowDown']) {
+        game.player.attackDirection = 'down';
     }
     else game.player.velX = 0;
-    console.log("attackDirection", game.player.attackDirection);
 
-    // Jumping
     if (game.keys[' '] && !game.player.isJumping) {
         game.player.velY = JUMP_FORCE;
         game.player.isJumping = true;
     }
 
-    // Attacking
     if (game.keys['x'] && !game.player.isAttacking) {
         game.player.isAttacking = true;
         attackWithMachete();
@@ -355,12 +343,10 @@ function updatePlayer() {
         }, ATTACK_DURATION);
     }
 
-    // Apply physics
     game.player.velY += GRAVITY;
     game.player.x += game.player.velX;
     game.player.y += game.player.velY;
 
-    // Keep player in bounds
     if (game.player.x < 0) game.player.x = 0;
     if (game.player.x + game.player.width > game.ctx.canvas.width) {
         game.player.x = game.ctx.canvas.width - game.player.width;
@@ -370,7 +356,6 @@ function updatePlayer() {
 function checkCollisions() {
     game.player.isJumping = true;
     
-    // Check floor collision first
     const floorY = game.ctx.canvas.height - game.player.height;
     if (game.player.y > floorY) {
         game.player.y = floorY;
@@ -378,25 +363,21 @@ function checkCollisions() {
         game.player.isJumping = false;
     }
     
-    // Check block collisions
     for (const block of game.blocks) {
         if (game.player.x < block.x + block.width &&
             game.player.x + game.player.width > block.x &&
             game.player.y + game.player.height > block.y &&
             game.player.y < block.y + block.height) {
             
-            // Ground collision
             if (game.player.velY > 0 && game.player.y + game.player.height - game.player.velY <= block.y) {
                 game.player.y = block.y - game.player.height;
                 game.player.velY = 0;
                 game.player.isJumping = false;
             }
-            // Ceiling collision
             else if (game.player.velY < 0 && game.player.y - game.player.velY >= block.y + block.height) {
                 game.player.y = block.y + block.height;
                 game.player.velY = 0;
             }
-            // Wall collision
             else if (game.player.velX !== 0) {
                 if (game.player.velX > 0) {
                     game.player.x = block.x - game.player.width;
@@ -417,6 +398,14 @@ function attackWithMachete() {
             attackBox = {
                 x: game.player.x,
                 y: game.player.y - attackRange,
+                width: game.player.width,
+                height: attackRange
+            };
+            break;
+        case 'down':
+            attackBox = {
+                x: game.player.x,
+                y: game.player.y + game.player.height,
                 width: game.player.width,
                 height: attackRange
             };
@@ -497,57 +486,53 @@ playerSprite.onload = function () {
 
 const macheteSlashSVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
-  <!-- Motion blur/speed lines -->
-  <path d="M50 100 C150 30, 250 10, 360 70" 
-        stroke="#ff0000" 
-        stroke-width="6" 
+  <!-- Wooden Handle -->
+  <path d="M50 95 L120 95 L120 105 L50 105 Z" 
+        fill="#8B4513" 
+        stroke="#654321" 
+        stroke-width="1"/>
+  
+  <!-- Handle Detail -->
+  <path d="M60 95 L70 95 L70 105 L60 105" 
+        fill="#A0522D" 
+        stroke="none"/>
+  <path d="M80 95 L90 95 L90 105 L80 105" 
+        fill="#A0522D" 
+        stroke="none"/>
+  <path d="M100 95 L110 95 L110 105 L100 105" 
+        fill="#A0522D" 
+        stroke="none"/>
+        
+  <!-- Blade -->
+  <path d="M120 90 L350 70 L360 80 L370 100 L350 110 L120 110 Z" 
+        fill="#D3D3D3" 
+        stroke="#A9A9A9" 
+        stroke-width="1"/>
+  
+  <!-- Blade Edge -->
+  <path d="M120 90 L350 70 L360 80" 
         fill="none" 
-        stroke-dasharray="10,20"/>
-  <path d="M50 110 C150 40, 250 20, 370 80" 
-        stroke="#ff9900" 
-        stroke-width="4" 
-        fill="none" 
-        stroke-dasharray="12,18"/>
-  <path d="M50 120 C150 50, 250 30, 380 90" 
-        stroke="#ffff00" 
-        stroke-width="2" 
-        fill="none" 
-        stroke-dasharray="6,12"/>
-  
-  <!-- Machete blade -->
-  <path d="M290 80 L360 70 L345 120 L275 105 Z" 
-        fill="#cfcfcf" 
-        stroke="#000000" 
-        stroke-width="3"/>
-  
-  <!-- Handle -->
-  <path d="M260 100 L290 85 L280 105 L250 120 Z" 
-        fill="#884c24" 
-        stroke="#000000" 
-        stroke-width="3"/>
-  
-  <!-- Bold Impact Lines -->
-  <path d="M350 85 L380 60" stroke="#000000" stroke-width="4"/>
-  <path d="M355 80 L385 55" stroke="#000000" stroke-width="3"/>
-  <path d="M360 75 L390 50" stroke="#000000" stroke-width="2"/>
-  
-  <!-- Impact Burst (Comic Style) -->
-  <path d="M370 65 L380 50 L390 65 L380 80 Z" 
-        fill="#ff0000" 
-        stroke="#000000" 
+        stroke="#808080" 
         stroke-width="2"/>
-  <path d="M375 60 L385 55 L395 60 L385 65 Z" 
-        fill="#ffff00" 
-        stroke="#000000" 
-        stroke-width="1.5"/>
   
-  <!-- Speed Effect (Dynamic Arcs) -->
-  <circle cx="380" cy="60" r="6" fill="#ffffff" stroke="#000000" stroke-width="2"/>
-  <circle cx="390" cy="55" r="4" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <!-- Shine/Gleam Effects -->
+  <path d="M150 85 L300 75" 
+        stroke="white" 
+        stroke-width="3" 
+        opacity="0.6"/>
+  <path d="M160 95 L290 87" 
+        stroke="white" 
+        stroke-width="2" 
+        opacity="0.4"/>
+  
+  <!-- Blade Tip -->
+  <path d="M350 70 L360 80 L370 100" 
+        fill="none" 
+        stroke="#666666" 
+        stroke-width="1.5"/>
 </svg>
 `;
 
-// Convert SVG to Image for Canvas
 const macheteSlashImage = new Image();
 macheteSlashImage.src = 'data:image/svg+xml;base64,' + btoa(macheteSlashSVG);
 
@@ -559,25 +544,20 @@ function render() {
     const ctx = game.ctx;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    // Draw background
     ctx.fillStyle = '#f0f0f0';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    // Draw floor
     ctx.fillStyle = '#666';
     ctx.fillRect(0, ctx.canvas.height - 10, ctx.canvas.width, 10);
 
-    // Draw blocks
     game.blocks.forEach(block => {
         ctx.fillStyle = block.fill || '#ff7f00';
         ctx.fillRect(block.x, block.y, block.width, block.height);
 
-        // Draw block borders
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         ctx.strokeRect(block.x, block.y, block.width, block.height);
     });
 
-    // Draw player sprite
     ctx.save();
     if (!game.player.facingRight) {
         ctx.translate(game.player.x + game.player.width, game.player.y);
@@ -588,43 +568,42 @@ function render() {
     }
     ctx.restore();
 
-    // Draw attack animation if attacking
     if (game.player.isAttacking) {
         ctx.save();
 
-        const tileSize = 50; // Tile size
+        const tileSize = 50;
         let slashX = game.player.x;
         let slashY = game.player.y;
         let rotation = 0;
 
-        // Determine slash position and rotation
         switch (game.player.attackDirection) {
             case 'right':
-                slashX += game.player.width; // Slash to the right of the player
+                slashX += game.player.width;
                 rotation = 0;
                 break;
             case 'left':
-                slashX -= tileSize; // Slash to the left of the player
-                rotation = Math.PI; // Rotate to the left
+                slashX -= tileSize;
+                rotation = Math.PI;
                 break;
             case 'up':
-                slashY -= tileSize; // Slash above the player
-                rotation = -Math.PI / 2; // Rotate upward
+                slashY -= tileSize;
+                rotation = -Math.PI / 2;
+                break;
+            case 'down':
+                slashY += game.player.height;
+                rotation = Math.PI / 2;
                 break;
         }
 
-        // Move to slash position and rotate
         ctx.translate(slashX + tileSize / 2, slashY + tileSize / 2);
         ctx.rotate(rotation);
 
-        // Draw the machete slash
         ctx.drawImage(macheteSlashImage, -tileSize / 2, -tileSize / 2, tileSize, tileSize / 3);
 
         ctx.restore();
     }
 }
 
-// Update timer
 function updateTimer() {
     if (game.isRunning) {
         game.currentTime = (Date.now() - game.startTime) / 1000;
@@ -632,12 +611,10 @@ function updateTimer() {
     }
 }
 
-// Start game
 function startGame() {
     game.isRunning = true;
     game.startTime = Date.now();
 
-    // Reset player position
     game.player.x = 50;
     game.player.y = 0;
     game.player.velX = 0;
@@ -648,7 +625,6 @@ function startGame() {
     gameLoop();
 }
 
-// Reset game
 function resetGame() {
     game.isRunning = false;
     if (game.currentTime < game.bestTime) {
@@ -657,7 +633,6 @@ function resetGame() {
         document.getElementById('bestTime').textContent = `Best: ${game.bestTime.toFixed(1)}s`;
     }
 
-    // Reset player position
     game.player.x = 50;
     game.player.y = 0;
     game.player.velX = 0;
@@ -668,7 +643,6 @@ function resetGame() {
     document.getElementById('startButton').onclick = startGame;
 }
 
-// Initialize the game when the page loads
 window.addEventListener('load', () => {
     init();
     if (localStorage.getItem('bestTime')) {
