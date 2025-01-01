@@ -86,20 +86,47 @@
         #mobileControls {
             display: none;
             position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.8);
+            bottom: 20px;
+            left: 0;
+            right: 0;
             padding: 10px;
-            border-radius: 10px;
             z-index: 1000;
+            pointer-events: none;
+        }
+        .control-group-left {
+            position: absolute;
+            left: 20px;
+            bottom: 0;
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        .control-group-right {
+            position: absolute;
+            right: 20px;
+            bottom: 0;
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
         }
         .control-btn {
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             margin: 5px;
-            font-size: 20px;
+            font-size: 24px;
+            background: rgba(255, 87, 34, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             touch-action: manipulation;
+            pointer-events: auto;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        .control-btn:active {
+            background: rgba(255, 87, 34, 0.8);
         }
         @media (max-width: 768px) {
             #mobileControls {
@@ -118,6 +145,26 @@
             h1 {
                 font-size: 1.5em;
             }
+            .controls {
+                display: none; /* Hide the controls description on mobile */
+            }
+        }
+        .level-complete {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 24px;
+            z-index: 1001;
+            text-align: center;
+        }
+        .level-complete button {
+            margin-top: 15px;
+            background: #4CAF50;
         }
     </style>
 </head>
@@ -144,45 +191,50 @@
     <button id="startButton" disabled>Start Game</button>
     
     <div id="mobileControls">
-        <button class="control-btn" id="leftBtn">←</button>
-        <button class="control-btn" id="jumpBtn">↑</button>
-        <button class="control-btn" id="rightBtn">→</button>
-        <button class="control-btn" id="attackBtn">X</button>
+        <div class="control-group-left">
+            <button class="control-btn" id="leftBtn">←</button>
+            <button class="control-btn" id="jumpBtn">↑</button>
+            <button class="control-btn" id="rightBtn">→</button>
+        </div>
+        <div class="control-group-right">
+            <button class="control-btn" id="attackBtn">⚔️</button>
+        </div>
     </div>
 
     <div class="controls">
         <h3>Controls:</h3>
         <ul>
             <li>Desktop: Arrow Keys to Move, Space to Jump, X to Attack</li>
-            <li>Mobile: On-screen buttons</li>
+            <li>Mobile: Touch the on-screen buttons</li>
         </ul>
     </div>
     <script>
 
 const game = {
-    player: {
-        x: 100,
-        y: 100,
-        width: 30,
-        height: 50,
-        velX: 0,
-        velY: 0,
-        isJumping: false,
-        isAttacking: false,
-        facingRight: true,
-        attackDirection: 'right', // 'right', 'left', or 'up'
-        attackTimeout: null
-    },
-    blocks: [],
-    keys: {},
-    isRunning: false,
-    startTime: 0,
-    currentTime: 0,
-    bestTime: localStorage.getItem('bestTime') || Infinity,
-    ctx: null,
-    scale: 1,
-    heightScale: 1,
-};
+        player: {
+            x: 100,
+            y: 100,
+            width: 30,
+            height: 50,
+            velX: 0,
+            velY: 0,
+            isJumping: false,
+            isAttacking: false,
+            facingRight: true,
+            attackDirection: 'right',
+            attackTimeout: null
+        },
+        blocks: [],
+        keys: {},
+        isRunning: false,
+        startTime: 0,
+        currentTime: 0,
+        bestTime: localStorage.getItem('bestTime') || Infinity,
+        ctx: null,
+        scale: 1,
+        heightScale: 1,
+        levelComplete: false
+    };
 
 const GRAVITY = 0.5;
 const JUMP_FORCE = -16;
@@ -291,16 +343,38 @@ function setupEventListeners() {
     document.getElementById('startButton').addEventListener('click', startGame);
 }
 
-function gameLoop() {
-    if (!game.isRunning) return;
+function completeLevelWithFlame() {
+        game.levelComplete = true;
+        game.isRunning = false;
 
-    updatePlayer();
-    checkCollisions();
-    render();
-    updateTimer();
-    
-    requestAnimationFrame(gameLoop);
-}
+        // Update best time if current time is better
+        if (game.currentTime < game.bestTime) {
+            game.bestTime = game.currentTime;
+            localStorage.setItem('bestTime', game.bestTime);
+            document.getElementById('bestTime').textContent = `Best: ${game.bestTime.toFixed(1)}s`;
+        }
+
+        // Create completion message
+        const completeDiv = document.createElement('div');
+        completeDiv.className = 'level-complete';
+        completeDiv.innerHTML = `
+            <h2>🔥 Level Complete! 🔥</h2>
+            <p>Time: ${game.currentTime.toFixed(1)}s</p>
+            <button onclick="resetGame()">Play Again</button>
+        `;
+        document.body.appendChild(completeDiv);
+    }
+
+function gameLoop() {
+        if (!game.isRunning) return;
+
+        updatePlayer();
+        checkCollisions();
+        render();
+        updateTimer();
+        
+        requestAnimationFrame(gameLoop);
+    }
 
 function updatePlayer() {
     if (game.keys['ArrowLeft']) {
@@ -354,87 +428,103 @@ function updatePlayer() {
 }
 
 function checkCollisions() {
-    game.player.isJumping = true;
-    
-    const floorY = game.ctx.canvas.height - game.player.height;
-    if (game.player.y > floorY) {
-        game.player.y = floorY;
-        game.player.velY = 0;
-        game.player.isJumping = false;
-    }
-    
-    for (const block of game.blocks) {
-        if (game.player.x < block.x + block.width &&
-            game.player.x + game.player.width > block.x &&
-            game.player.y + game.player.height > block.y &&
-            game.player.y < block.y + block.height) {
-            
-            if (game.player.velY > 0 && game.player.y + game.player.height - game.player.velY <= block.y) {
-                game.player.y = block.y - game.player.height;
-                game.player.velY = 0;
-                game.player.isJumping = false;
-            }
-            else if (game.player.velY < 0 && game.player.y - game.player.velY >= block.y + block.height) {
-                game.player.y = block.y + block.height;
-                game.player.velY = 0;
-            }
-            else if (game.player.velX !== 0) {
-                if (game.player.velX > 0) {
+        game.player.isJumping = true;
+        
+        // Floor collision
+        const floorY = game.ctx.canvas.height - game.player.height;
+        if (game.player.y > floorY) {
+            game.player.y = floorY;
+            game.player.velY = 0;
+            game.player.isJumping = false;
+        }
+        
+        for (const block of game.blocks) {
+            if (game.player.x < block.x + block.width &&
+                game.player.x + game.player.width > block.x &&
+                game.player.y + game.player.height > block.y &&
+                game.player.y < block.y + block.height) {
+                
+                // Calculate overlap on each side
+                const overlapLeft = (game.player.x + game.player.width) - block.x;
+                const overlapRight = (block.x + block.width) - game.player.x;
+                const overlapTop = (game.player.y + game.player.height) - block.y;
+                const overlapBottom = (block.y + block.height) - game.player.y;
+
+                // Find the smallest overlap
+                const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+
+                // Resolve collision based on smallest overlap
+                if (minOverlap === overlapTop && game.player.velY > 0) {
+                    game.player.y = block.y - game.player.height;
+                    game.player.velY = 0;
+                    game.player.isJumping = false;
+                }
+                else if (minOverlap === overlapBottom && game.player.velY < 0) {
+                    game.player.y = block.y + block.height;
+                    game.player.velY = 0;
+                }
+                else if (minOverlap === overlapLeft) {
                     game.player.x = block.x - game.player.width;
-                } else {
+                }
+                else if (minOverlap === overlapRight) {
                     game.player.x = block.x + block.width;
                 }
             }
         }
     }
-}
 
 function attackWithMachete() {
-    const attackRange = 50;
-    let attackBox;
+        const attackRange = 50;
+        let attackBox;
 
-    switch (game.player.attackDirection) {
-        case 'up':
-            attackBox = {
-                x: game.player.x,
-                y: game.player.y - attackRange,
-                width: game.player.width,
-                height: attackRange
-            };
-            break;
-        case 'down':
-            attackBox = {
-                x: game.player.x,
-                y: game.player.y + game.player.height,
-                width: game.player.width,
-                height: attackRange
-            };
-            break;
-        case 'right':
-            attackBox = {
-                x: game.player.x + game.player.width,
-                y: game.player.y,
-                width: attackRange,
-                height: game.player.height
-            };
-            break;
-        case 'left':
-            attackBox = {
-                x: game.player.x - attackRange,
-                y: game.player.y,
-                width: attackRange,
-                height: game.player.height
-            };
-            break;
+        switch (game.player.attackDirection) {
+            case 'up':
+                attackBox = {
+                    x: game.player.x,
+                    y: game.player.y - attackRange,
+                    width: game.player.width,
+                    height: attackRange
+                };
+                break;
+            case 'down':
+                attackBox = {
+                    x: game.player.x,
+                    y: game.player.y + game.player.height,
+                    width: game.player.width,
+                    height: attackRange
+                };
+                break;
+            case 'right':
+                attackBox = {
+                    x: game.player.x + game.player.width,
+                    y: game.player.y,
+                    width: attackRange,
+                    height: game.player.height
+                };
+                break;
+            case 'left':
+                attackBox = {
+                    x: game.player.x - attackRange,
+                    y: game.player.y,
+                    width: attackRange,
+                    height: game.player.height
+                };
+                break;
+        }
+
+        const initialBlockCount = game.blocks.length;
+        game.blocks = game.blocks.filter(block => {
+            return !(attackBox.x < block.x + block.width &&
+                    attackBox.x + attackBox.width > block.x &&
+                    attackBox.y < block.y + block.height &&
+                    attackBox.y + attackBox.height > block.y);
+        });
+
+        // Check if level is complete
+        if (game.blocks.length === 0 && initialBlockCount > 0) {
+            completeLevelWithFlame();
+        }
     }
-
-    game.blocks = game.blocks.filter(block => {
-        return !(attackBox.x < block.x + block.width &&
-                attackBox.x + attackBox.width > block.x &&
-                attackBox.y < block.y + block.height &&
-                attackBox.y + attackBox.height > block.y);
-    });
-}
 
 const playerSpriteSVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
@@ -626,22 +716,24 @@ function startGame() {
 }
 
 function resetGame() {
-    game.isRunning = false;
-    if (game.currentTime < game.bestTime) {
-        game.bestTime = game.currentTime;
-        localStorage.setItem('bestTime', game.bestTime);
-        document.getElementById('bestTime').textContent = `Best: ${game.bestTime.toFixed(1)}s`;
+        game.isRunning = false;
+        game.levelComplete = false;
+        
+        // Remove level complete message if it exists
+        const completeMessage = document.querySelector('.level-complete');
+        if (completeMessage) {
+            completeMessage.remove();
+        }
+
+        game.player.x = 50;
+        game.player.y = 0;
+        game.player.velX = 0;
+        game.player.velY = 0;
+
+        init();
+        document.getElementById('startButton').textContent = 'Start Game';
+        document.getElementById('startButton').onclick = startGame;
     }
-
-    game.player.x = 50;
-    game.player.y = 0;
-    game.player.velX = 0;
-    game.player.velY = 0;
-
-    init();
-    document.getElementById('startButton').textContent = 'Start Game';
-    document.getElementById('startButton').onclick = startGame;
-}
 
 window.addEventListener('load', () => {
     init();
