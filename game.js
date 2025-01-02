@@ -148,6 +148,7 @@ async function loadSVG(source, isUrl = false) {
         } else {
             svgText = await source.text();
         }
+        document.getElementById('currentLevel').textContent = `Level: ${currentLevel.split('/').pop()}`;
         loadSVGContent(svgText);
     } catch (error) {
         console.error('Error loading SVG:', error);
