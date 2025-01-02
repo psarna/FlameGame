@@ -34,6 +34,8 @@ function isMobileDevice() {
     return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
 }
 
+var currentLevel = '';
+
 function init() {
     const container = document.getElementById('gameContainer');
     container.innerHTML = '';
@@ -46,8 +48,12 @@ function init() {
     game.ctx = canvas.getContext('2d');
     setupEventListeners();
 
+
     levels = ["./default1.svg", "./default2.svg"];
-    loadSVG(levels[Math.floor(Math.random() * levels.length)], true);
+    if (currentLevel === '') {
+        currentLevel = levels[Math.floor(Math.random() * levels.length)];
+    }
+    loadSVG(currentLevel, true);
 
     return game.ctx;
 }
@@ -57,7 +63,8 @@ function loadSVGContent(svgContent) {
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const rects = Array.from(svgDoc.querySelectorAll('rect'));
 
-    const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%');
+    const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%' && rect.getAttribute('fill') !== 'url(#background)');
+    console.log(validRects)
 
     const containerWidth = game.ctx.canvas.width;
     const containerHeight = game.ctx.canvas.height;
@@ -100,6 +107,7 @@ async function loadSVG(source, isUrl = false) {
         if (isUrl) {
             const response = await fetch(source);
             svgText = await response.text();
+            currentLevel = source;
         } else {
             svgText = await source.text();
         }
@@ -117,7 +125,7 @@ function setupEventListeners() {
             e.preventDefault();
         }
     });
-    
+
     window.addEventListener('keyup', e => {
         game.keys[e.key] = false;
     });
@@ -125,7 +133,7 @@ function setupEventListeners() {
     // Mobile controls setup
     if (isMobileDevice()) {
         document.getElementById('mobileControls').style.display = 'block';
-        
+
         // Setup for movement controls
         const setupTouchControl = (elementId, keyToSimulate) => {
             const element = document.getElementById(elementId);
@@ -155,7 +163,7 @@ function setupEventListeners() {
         // Setup left/right movement
         setupTouchControl('leftBtn', 'ArrowLeft');
         setupTouchControl('rightBtn', 'ArrowRight');
-        
+
         // Special handling for jump button - combines up arrow and space
         const jumpBtn = document.getElementById('jumpBtn');
         let jumpTouchStarted = false;
@@ -204,14 +212,14 @@ function setupEventListeners() {
             loadSVG(e.target.files[0]);
         }
     });
-    
+
     document.getElementById('loadUrlButton').addEventListener('click', () => {
         const url = document.getElementById('urlInput').value;
         if (url) {
             loadSVG(url, true);
         }
     });
-    
+
     document.getElementById('startButton').addEventListener('click', startGame);
 }
 
