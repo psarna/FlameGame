@@ -127,7 +127,6 @@ function loadSVGContent(svgContent) {
     game.destroyedBlocks = 0;
     updateBlockCounter();
 
-    document.getElementById('startButton').disabled = false;
     render();
     cancelAnimationFrame(loopId);
     startGame();
@@ -278,8 +277,6 @@ function setupEventListeners() {
         loadSVG(levels[Math.floor(Math.random() * levels.length)], true);
 
     });
-
-    document.getElementById('startButton').addEventListener('click', startGame);
 }
 
 function completeLevelWithFlame() {
@@ -661,8 +658,6 @@ function startGame() {
     game.player.velX = 0;
     game.player.velY = 0;
 
-    document.getElementById('startButton').textContent = 'Reset Game';
-    document.getElementById('startButton').onclick = resetGame;
     gameLoop();
 }
 
@@ -686,9 +681,6 @@ function resetGame() {
 
     init();
     updateBlockCounter();
-
-    document.getElementById('startButton').textContent = 'Start Game';
-    document.getElementById('startButton').onclick = startGame;
 }
 
 window.addEventListener('load', () => {

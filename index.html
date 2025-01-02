@@ -29,8 +29,11 @@
         <span id="blockCounter">Blocks: 0/0</span>
         <span id="currentLevel"></span>
     </div>
+    <div class="controls">
+        <span>Desktop: Arrow Keys to Move, Space to Jump, X to Attack; Mobile: Touch the on-screen buttons</span>
+    </div>
     <div id="gameContainer"></div>
-    <button id="startButton" disabled>Start Game</button>
+    <span>Made by <a href="https://bio.sarna.dev">sarna</a>.<br>This game costs me $0 a month to host, because it's just low quality javascript hosted on GitHub pages.<br>Please consider donating to help me meet my $0/month goal!</span>
 
     <div id="mobileControls">
         <div class="control-zone zone-left">
@@ -48,14 +51,6 @@
         <div class="control-zone zone-attack">
             <button class="control-btn" id="attackBtn">⚔️</button>
         </div>
-    </div>
-
-    <div class="controls">
-        <h3>Controls:</h3>
-        <ul>
-            <li>Desktop: Arrow Keys to Move, Space to Jump, X to Attack</li>
-            <li>Mobile: Touch the on-screen buttons</li>
-        </ul>
     </div>
     <script src="game.js"></script>
 </body>
