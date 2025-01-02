@@ -234,7 +234,7 @@ function setupEventListeners() {
                 attackWithMachete();
                 setTimeout(() => {
                     game.player.isAttacking = false;
-                }, ATTACK_DURATION);
+                }, ATTACK_DURATION * 2); // longer for mobile
             }
         }, { passive: false });
 
