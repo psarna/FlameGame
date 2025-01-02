@@ -92,38 +92,53 @@ h1 {
 
 #mobileControls {
     display: none;
-    /* Changed by JS on mobile devices */
     position: fixed;
-    bottom: 20px;
+    top: 0;
     left: 0;
     right: 0;
-    padding: 10px;
+    bottom: 0;
     z-index: 1000;
+    pointer-events: none;
 }
-
-.control-group-left {
-    position: fixed;
-    left: 20px;
-    bottom: 20px;
+.control-zone {
+    position: absolute;
+    width: 33.33%;
+    height: 33.33%;
     display: flex;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
 }
-
-.control-group-right {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    display: flex;
-    gap: 10px;
+/* Left zone */
+.zone-left {
+    left: 0;
+    bottom: 0;
+    height: 100%;
 }
-
+/* Right zone */
+.zone-right {
+    right: 0;
+    bottom: 0;
+    height: 100%;
+}
+/* Jump/Up zone */
+.zone-jump {
+    left: 33.33%;
+    right: 33.33%;
+    top: 0;
+}
+/* Attack zone */
+.zone-attack {
+    left: 33.33%;
+    right: 33.33%;
+    bottom: 0;
+}
 .control-btn {
-    width: 60px;
-    height: 60px;
-    margin: 5px;
-    font-size: 24px;
-    background: rgba(255, 87, 34, 0.6);
-    border: 2px solid rgba(255, 255, 255, 0.4);
+    width: 100px;
+    height: 100px;
+    font-size: 40px;
+    background: rgba(255, 87, 34, 0.3);
+    border: 3px solid rgba(255, 255, 255, 0.4);
     color: white;
     border-radius: 50%;
     display: flex;
@@ -131,16 +146,17 @@ h1 {
     justify-content: center;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
-
 .control-btn:active {
-    background: rgba(255, 87, 34, 0.8);
+    background: rgba(255, 87, 34, 0.5);
 }
-
 @media (max-width: 768px) {
     .controls {
         display: none;
+    }
+    #gameContainer {
+        border: none;
     }
 }
 

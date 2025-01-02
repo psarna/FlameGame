@@ -110,14 +110,14 @@ async function loadSVG(source, isUrl = false) {
 }
 
 function setupEventListeners() {
-    // Previous keyboard events remain the same
+    // Desktop keyboard controls
     window.addEventListener('keydown', e => {
         game.keys[e.key] = true;
-        if (e.key === ' ' | ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        if (e.key === ' ' || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
             e.preventDefault();
         }
     });
-
+    
     window.addEventListener('keyup', e => {
         game.keys[e.key] = false;
     });
@@ -125,45 +125,76 @@ function setupEventListeners() {
     // Mobile controls setup
     if (isMobileDevice()) {
         document.getElementById('mobileControls').style.display = 'block';
+        
+        // Setup for movement controls
+        const setupTouchControl = (elementId, keyToSimulate) => {
+            const element = document.getElementById(elementId);
+            let touchStarted = false;
 
-        // Left button
-        const leftBtn = document.getElementById('leftBtn');
-        leftBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            game.keys['ArrowLeft'] = true;
-        });
-        leftBtn.addEventListener('touchend', () => {
-            game.keys['ArrowLeft'] = false;
-        });
+            element.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchStarted = true;
+                game.keys[keyToSimulate] = true;
+            }, { passive: false });
 
-        // Right button
-        const rightBtn = document.getElementById('rightBtn');
-        rightBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            game.keys['ArrowRight'] = true;
-        });
-        rightBtn.addEventListener('touchend', () => {
-            game.keys['ArrowRight'] = false;
-        });
+            element.addEventListener('touchend', () => {
+                if (touchStarted) {
+                    game.keys[keyToSimulate] = false;
+                    touchStarted = false;
+                }
+            });
 
-        // Jump button
+            element.addEventListener('touchcancel', () => {
+                if (touchStarted) {
+                    game.keys[keyToSimulate] = false;
+                    touchStarted = false;
+                }
+            });
+        };
+
+        // Setup left/right movement
+        setupTouchControl('leftBtn', 'ArrowLeft');
+        setupTouchControl('rightBtn', 'ArrowRight');
+        
+        // Special handling for jump button - combines up arrow and space
         const jumpBtn = document.getElementById('jumpBtn');
+        let jumpTouchStarted = false;
+
         jumpBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            jumpTouchStarted = true;
+            // Simulate both up arrow and space bar for jumping
+            game.keys['ArrowUp'] = true;
             game.keys[' '] = true;
-        });
+        }, { passive: false });
+
         jumpBtn.addEventListener('touchend', () => {
-            game.keys[' '] = false;
+            if (jumpTouchStarted) {
+                game.keys['ArrowUp'] = false;
+                game.keys[' '] = false;
+                jumpTouchStarted = false;
+            }
         });
 
-        // Attack button
-        const attackBtn = document.getElementById('attackBtn');
-        attackBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            game.keys['x'] = true;
+        jumpBtn.addEventListener('touchcancel', () => {
+            if (jumpTouchStarted) {
+                game.keys['ArrowUp'] = false;
+                game.keys[' '] = false;
+                jumpTouchStarted = false;
+            }
         });
-        attackBtn.addEventListener('touchend', () => {
-            game.keys['x'] = false;
+
+        // Attack control
+        setupTouchControl('attackBtn', 'x');
+
+        // Update attack direction based on facing
+        document.getElementById('attackBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (game.player.facingRight) {
+                game.player.attackDirection = 'right';
+            } else {
+                game.player.attackDirection = 'left';
+            }
         });
     }
 
@@ -173,14 +204,14 @@ function setupEventListeners() {
             loadSVG(e.target.files[0]);
         }
     });
-
+    
     document.getElementById('loadUrlButton').addEventListener('click', () => {
         const url = document.getElementById('urlInput').value;
         if (url) {
             loadSVG(url, true);
         }
     });
-
+    
     document.getElementById('startButton').addEventListener('click', startGame);
 }
 
