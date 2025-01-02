@@ -90,7 +90,6 @@ function loadSVGContent(svgContent) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const rects = Array.from(svgDoc.querySelectorAll('rect'));
-
     const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%' && rect.getAttribute('fill') !== 'url(#background)');
     const containerWidth = game.ctx.canvas.width;
     const containerHeight = game.ctx.canvas.height;
@@ -114,6 +113,9 @@ function loadSVGContent(svgContent) {
         const height = parseFloat(rect.getAttribute('height'));
         const mouseover = rect.getAttribute('onmouseover');
         let tooltip = rect.getAttribute('onmouseover') || rect.getAttribute('title') || '';
+        if (tooltip === '' && rect.parentNode.tagName === 'g') {
+            tooltip = rect.parentNode.getAttribute('onmouseover') || '';
+        }
         if (tooltip.includes('s(')) {
             tooltip = tooltip.substring(tooltip.indexOf('s(') + 3, tooltip.indexOf(')'));
         }
