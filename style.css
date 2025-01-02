@@ -1,0 +1,164 @@
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 10px;
+    background: #f5f5f5;
+    min-height: 100vh;
+}
+
+#gameContainer {
+    border: 2px solid #333;
+    width: 95vw;
+    height: 80vh;
+    overflow: hidden;
+    background: white;
+    position: relative;
+}
+
+.controls {
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    margin: 10px 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 95vw;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 95vw;
+}
+
+.input-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#urlInput {
+    flex: 1;
+    min-width: 150px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+button {
+    background: #ff5722;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+button:hover {
+    background: #f4511e;
+}
+
+button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+
+h1 {
+    color: #ff5722;
+    font-size: 2em;
+    margin: 10px 0;
+}
+
+#stats {
+    font-size: 1.2em;
+    margin: 5px 0;
+    font-weight: bold;
+}
+
+#stats span {
+    margin: 0 10px;
+}
+
+#mobileControls {
+    display: none;
+    /* Changed by JS on mobile devices */
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    padding: 10px;
+    z-index: 1000;
+}
+
+.control-group-left {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.control-group-right {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.control-btn {
+    width: 60px;
+    height: 60px;
+    margin: 5px;
+    font-size: 24px;
+    background: rgba(255, 87, 34, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.control-btn:active {
+    background: rgba(255, 87, 34, 0.8);
+}
+
+@media (max-width: 768px) {
+    .controls {
+        display: none;
+    }
+}
+
+.level-complete {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 24px;
+    z-index: 1001;
+    text-align: center;
+}
+
+.level-complete button {
+    margin-top: 15px;
+    background: #4CAF50;
+}
