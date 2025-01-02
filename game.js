@@ -129,6 +129,7 @@ function loadSVGContent(svgContent) {
 
     document.getElementById('startButton').disabled = false;
     render();
+    cancelAnimationFrame(loopId);
     startGame();
 }
 
@@ -285,6 +286,7 @@ function completeLevelWithFlame() {
     document.body.appendChild(completeDiv);
 }
 
+var loopId = 0;
 function gameLoop() {
     if (!game.isRunning) return;
 
@@ -293,10 +295,11 @@ function gameLoop() {
     render();
     updateTimer();
 
-    requestAnimationFrame(gameLoop);
+    loopId = requestAnimationFrame(gameLoop);
 }
 
 function updatePlayer() {
+    console.log("updating")
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
         game.player.facingRight = false;
@@ -646,6 +649,7 @@ function startGame() {
 }
 
 function resetGame() {
+    cancelAnimationFrame(loopId);
     game.isRunning = false;
     game.levelComplete = false;
 
