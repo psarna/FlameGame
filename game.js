@@ -90,7 +90,9 @@ function loadSVGContent(svgContent) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const rects = Array.from(svgDoc.querySelectorAll('rect'));
+
     const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%' && rect.getAttribute('fill') !== 'url(#background)');
+
     const containerWidth = game.ctx.canvas.width;
     const containerHeight = game.ctx.canvas.height;
 
@@ -111,8 +113,7 @@ function loadSVGContent(svgContent) {
         const y = parseFloat(rect.getAttribute('y'));
         const width = parseFloat(rect.getAttribute('width'));
         const height = parseFloat(rect.getAttribute('height'));
-        const mouseover = rect.getAttribute('onmouseover');
-        let tooltip = rect.getAttribute('onmouseover') || rect.getAttribute('title') || '';
+        let tooltip = rect.getAttribute('onmouseover') || '';
         if (tooltip === '' && rect.parentNode.tagName === 'g') {
             tooltip = rect.parentNode.getAttribute('onmouseover') || '';
         }
@@ -120,7 +121,7 @@ function loadSVGContent(svgContent) {
             tooltip = tooltip.substring(tooltip.indexOf('s(') + 3, tooltip.indexOf(')'));
         }
 
-          return {
+        return {
             x: x * game.scale,
             y: y * game.heightScale,
             width: width * game.scale,
@@ -134,6 +135,11 @@ function loadSVGContent(svgContent) {
 
     // Add activeTooltips array to game object if it doesn't exist
     game.activeTooltips = game.activeTooltips || [];
+    // Add tooltip spacing configuration
+    game.tooltipConfig = {
+        baseHeight: 20,  // Height of each tooltip
+        verticalSpacing: 5  // Space between tooltips
+    };
 
     game.totalBlocks = game.blocks.length;
     game.destroyedBlocks = 0;
@@ -476,10 +482,21 @@ function attackWithMachete() {
             block.destroyTime = Date.now();
             
             if (block.tooltipText) {
+                // Find similar positioned tooltips
+                const baseX = block.x + block.width / 2;
+                const baseY = block.y + block.height / 2;
+                
+                // Count existing tooltips in similar positions
+                const nearbyTooltips = game.activeTooltips.filter(t => {
+                    return Math.abs(t.baseX - baseX) < 100;  // Consider tooltips within 100px horizontally
+                }).length;
+                
                 game.activeTooltips.push({
                     text: block.tooltipText,
-                    x: block.x + block.width / 2,
-                    y: block.y + block.height / 2,
+                    baseX: baseX,  // Store original x position
+                    baseY: baseY,  // Store original y position
+                    x: baseX,
+                    y: baseY - (nearbyTooltips * (game.tooltipConfig.baseHeight + game.tooltipConfig.verticalSpacing)),
                     createdAt: Date.now(),
                     opacity: 1
                 });
@@ -626,6 +643,9 @@ function render() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
+    // Sort tooltips by y position for proper layering
+    game.activeTooltips.sort((a, b) => a.y - b.y);
+    
     game.activeTooltips = game.activeTooltips.filter(tooltip => {
         const age = currentTime - tooltip.createdAt;
         if (age > 1000) { // 1 second display time
@@ -634,7 +654,14 @@ function render() {
         
         if (tooltip.opacity <= 0) return false;
 
+        // Draw tooltip with shadow for better visibility
         ctx.font = '14px Arial';
+        ctx.shadowColor = 'white';
+        ctx.shadowBlur = 4;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'white';
+        ctx.strokeText(tooltip.text, tooltip.x, tooltip.y);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = `rgba(0, 0, 0, ${tooltip.opacity})`;
         ctx.fillText(tooltip.text, tooltip.x, tooltip.y);
         
