@@ -92,7 +92,6 @@ function loadSVGContent(svgContent) {
     const rects = Array.from(svgDoc.querySelectorAll('rect'));
 
     const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%' && rect.getAttribute('fill') !== 'url(#background)');
-
     const containerWidth = game.ctx.canvas.width;
     const containerHeight = game.ctx.canvas.height;
 
@@ -113,15 +112,26 @@ function loadSVGContent(svgContent) {
         const y = parseFloat(rect.getAttribute('y'));
         const width = parseFloat(rect.getAttribute('width'));
         const height = parseFloat(rect.getAttribute('height'));
+        const mouseover = rect.getAttribute('onmouseover');
+        let tooltip = rect.getAttribute('onmouseover') || rect.getAttribute('title') || '';
+        if (tooltip.includes('s(')) {
+            tooltip = tooltip.substring(tooltip.indexOf('s(') + 3, tooltip.indexOf(')'));
+        }
 
-        return {
+          return {
             x: x * game.scale,
             y: y * game.heightScale,
             width: width * game.scale,
             height: height * game.heightScale,
-            fill: rect.getAttribute('fill')
+            fill: rect.getAttribute('fill'),
+            tooltipText: tooltip,
+            destroyed: false,
+            destroyTime: 0
         };
     });
+
+    // Add activeTooltips array to game object if it doesn't exist
+    game.activeTooltips = game.activeTooltips || [];
 
     game.totalBlocks = game.blocks.length;
     game.destroyedBlocks = 0;
@@ -314,7 +324,6 @@ function gameLoop() {
 }
 
 function updatePlayer() {
-    console.log("updating")
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
         game.player.facingRight = false;
@@ -452,24 +461,37 @@ function attackWithMachete() {
 
     const initialBlockCount = game.blocks.length;
     const blocksBeforeAttack = game.blocks.length;
-    game.blocks = game.blocks.filter(block => {
-        return !(attackBox.x < block.x + block.width &&
+
+    // Check for destroyed blocks and create tooltips
+    game.blocks.forEach(block => {
+        if (!block.destroyed && 
+            attackBox.x < block.x + block.width &&
             attackBox.x + attackBox.width > block.x &&
             attackBox.y < block.y + block.height &&
-            attackBox.y + attackBox.height > block.y);
+            attackBox.y + attackBox.height > block.y) {
+            
+            block.destroyed = true;
+            block.destroyTime = Date.now();
+            
+            if (block.tooltipText) {
+                game.activeTooltips.push({
+                    text: block.tooltipText,
+                    x: block.x + block.width / 2,
+                    y: block.y + block.height / 2,
+                    createdAt: Date.now(),
+                    opacity: 1
+                });
+            }
+        }
     });
 
-    // Add this after the filter
+    // Filter out destroyed blocks
+    game.blocks = game.blocks.filter(block => !block.destroyed);
+
     game.destroyedBlocks += (blocksBeforeAttack - game.blocks.length);
     updateBlockCounter();
 
-    // Check if level is complete
     if (game.blocks.length === 0 && blocksBeforeAttack > 0) {
-        completeLevelWithFlame();
-    }
-
-    // Check if level is complete
-    if (game.blocks.length === 0 && initialBlockCount > 0) {
         completeLevelWithFlame();
     }
 }
@@ -588,6 +610,7 @@ function render() {
     ctx.fillStyle = '#666';
     ctx.fillRect(0, ctx.canvas.height - 10, ctx.canvas.width, 10);
 
+    // Render blocks
     game.blocks.forEach(block => {
         ctx.fillStyle = block.fill || '#ff7f00';
         ctx.fillRect(block.x, block.y, block.width, block.height);
@@ -596,6 +619,27 @@ function render() {
         ctx.strokeRect(block.x, block.y, block.width, block.height);
     });
 
+    // Render active tooltips
+    const currentTime = Date.now();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    game.activeTooltips = game.activeTooltips.filter(tooltip => {
+        const age = currentTime - tooltip.createdAt;
+        if (age > 1000) { // 1 second display time
+            tooltip.opacity = 1 - (age - 1000) / 500; // 500ms fade out
+        }
+        
+        if (tooltip.opacity <= 0) return false;
+
+        ctx.font = '14px Arial';
+        ctx.fillStyle = `rgba(0, 0, 0, ${tooltip.opacity})`;
+        ctx.fillText(tooltip.text, tooltip.x, tooltip.y);
+        
+        return tooltip.opacity > 0;
+    });
+
+    // Render player
     ctx.save();
     if (!game.player.facingRight) {
         ctx.translate(game.player.x + game.player.width, game.player.y);
@@ -606,6 +650,7 @@ function render() {
     }
     ctx.restore();
 
+    // Render machete slash
     if (game.player.isAttacking) {
         ctx.save();
 
