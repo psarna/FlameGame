@@ -211,6 +211,14 @@ function setupEventListeners() {
             jumpTouchStarted = true;
             game.keys['ArrowUp'] = true;
             game.keys[' '] = true;
+            game.player.attackDirection = 'up';
+            if (!game.player.isAttacking) {
+                game.player.isAttacking = true;
+                attackWithMachete();
+                setTimeout(() => {
+                    game.player.isAttacking = false;
+                }, ATTACK_DURATION);
+            }
         }, { passive: false });
 
         jumpBtn.addEventListener('touchend', () => {
