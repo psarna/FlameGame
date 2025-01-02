@@ -134,7 +134,7 @@ function loadSVGContent(svgContent) {
 }
 
 function updateBlockCounter() {
-    document.getElementById('blockCounter').textContent = 
+    document.getElementById('blockCounter').textContent =
         `Blocks destroyed: ${game.destroyedBlocks}/${game.totalBlocks}`;
 }
 
@@ -209,7 +209,6 @@ function setupEventListeners() {
         jumpBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             jumpTouchStarted = true;
-            // Simulate both up arrow and space bar for jumping
             game.keys['ArrowUp'] = true;
             game.keys[' '] = true;
         }, { passive: false });
@@ -230,10 +229,8 @@ function setupEventListeners() {
             }
         });
 
-        // Attack control
         setupTouchControl('attackBtn', 'x');
 
-        // Update attack direction based on facing
         document.getElementById('attackBtn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (game.player.facingRight) {
@@ -242,6 +239,18 @@ function setupEventListeners() {
                 game.player.attackDirection = 'left';
             }
         });
+
+        document.getElementById('downBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            game.player.attackDirection = 'down';
+            if (!game.player.isAttacking) {
+                game.player.isAttacking = true;
+                attackWithMachete();
+                setTimeout(() => {
+                    game.player.isAttacking = false;
+                }, ATTACK_DURATION);
+            }
+        }, { passive: false });
     }
 
     // Previous file and URL input listeners remain the same
@@ -444,7 +453,7 @@ function attackWithMachete() {
             attackBox.y < block.y + block.height &&
             attackBox.y + attackBox.height > block.y);
     });
-    
+
     // Add this after the filter
     game.destroyedBlocks += (blocksBeforeAttack - game.blocks.length);
     updateBlockCounter();
@@ -666,7 +675,7 @@ function resetGame() {
     game.player.velY = 0;
 
     game.destroyedBlocks = 0;
-    
+
     init();
     updateBlockCounter();
 
