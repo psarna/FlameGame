@@ -22,7 +22,9 @@ const game = {
     ctx: null,
     scale: 1,
     heightScale: 1,
-    levelComplete: false
+    levelComplete: false,
+    totalBlocks: 0,
+    destroyedBlocks: 0
 };
 
 const GRAVITY = 0.5;
@@ -48,8 +50,33 @@ function init() {
     game.ctx = canvas.getContext('2d');
     setupEventListeners();
 
-
-    levels = ["./default1.svg", "./default2.svg"];
+    // The originals! Huge tribute to Brendan Gregg's FlameGraphs
+    levels = [
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/brkbytes-mysql.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-syscalls.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-ipnet-diff.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mixedmode-flamegraph-java.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-qemu-both.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/io-gzip.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-bash.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-broken.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-grep.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-tcpfuse.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tar.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql-filt.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-zoomable.html",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/io-mysql.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-busy.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-working.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-ipdce.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-iozone.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tcpsend.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/hotcold-kernelthread.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/mallocbytes-bash.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-idle.svg",
+        "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/README"
+    ];
     if (currentLevel === '') {
         currentLevel = levels[Math.floor(Math.random() * levels.length)];
     }
@@ -64,7 +91,6 @@ function loadSVGContent(svgContent) {
     const rects = Array.from(svgDoc.querySelectorAll('rect'));
 
     const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%' && rect.getAttribute('fill') !== 'url(#background)');
-    console.log(validRects)
 
     const containerWidth = game.ctx.canvas.width;
     const containerHeight = game.ctx.canvas.height;
@@ -96,9 +122,18 @@ function loadSVGContent(svgContent) {
         };
     });
 
+    game.totalBlocks = game.blocks.length;
+    game.destroyedBlocks = 0;
+    updateBlockCounter();
+
     document.getElementById('startButton').disabled = false;
     render();
     startGame();
+}
+
+function updateBlockCounter() {
+    document.getElementById('blockCounter').textContent = 
+        `Blocks destroyed: ${game.destroyedBlocks}/${game.totalBlocks}`;
 }
 
 async function loadSVG(source, isUrl = false) {
@@ -393,12 +428,22 @@ function attackWithMachete() {
     }
 
     const initialBlockCount = game.blocks.length;
+    const blocksBeforeAttack = game.blocks.length;
     game.blocks = game.blocks.filter(block => {
         return !(attackBox.x < block.x + block.width &&
             attackBox.x + attackBox.width > block.x &&
             attackBox.y < block.y + block.height &&
             attackBox.y + attackBox.height > block.y);
     });
+    
+    // Add this after the filter
+    game.destroyedBlocks += (blocksBeforeAttack - game.blocks.length);
+    updateBlockCounter();
+
+    // Check if level is complete
+    if (game.blocks.length === 0 && blocksBeforeAttack > 0) {
+        completeLevelWithFlame();
+    }
 
     // Check if level is complete
     if (game.blocks.length === 0 && initialBlockCount > 0) {
@@ -610,7 +655,11 @@ function resetGame() {
     game.player.velX = 0;
     game.player.velY = 0;
 
+    game.destroyedBlocks = 0;
+    
     init();
+    updateBlockCounter();
+
     document.getElementById('startButton').textContent = 'Start Game';
     document.getElementById('startButton').onclick = startGame;
 }
