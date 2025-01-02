@@ -125,11 +125,11 @@ h1 {
     height: 50%;
 }
 
-/* Up zone */
-.zone-up {
+/* Jump zone - moved down from top */
+.zone-jump {
     left: 33.33%;
     right: 33.33%;
-    top: 0;
+    top: 25%;
 }
 
 /* Down zone */
@@ -160,6 +160,10 @@ h1 {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+#downBtn {
+    font-size: 40px;
 }
 
 .control-btn:active {
