@@ -78,6 +78,11 @@ function init() {
     game.ctx = canvas.getContext('2d');
     setupEventListeners();
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const svgUrl = urlParams.get('url');
+    if (svgUrl) {
+        currentLevel = svgUrl;
+    }
     if (currentLevel === '') {
         currentLevel = levels[Math.floor(Math.random() * levels.length)];
     }
