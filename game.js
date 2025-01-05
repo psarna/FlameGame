@@ -142,8 +142,8 @@ function loadSVGContent(svgContent) {
     game.activeTooltips = game.activeTooltips || [];
     // Add tooltip spacing configuration
     game.tooltipConfig = {
-        baseHeight: 20,  // Height of each tooltip
-        verticalSpacing: 5  // Space between tooltips
+        baseHeight: 12,     // Height of each tooltip
+        verticalSpacing: 4  // Space between tooltips
     };
 
     game.totalBlocks = game.blocks.length;
