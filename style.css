@@ -7,6 +7,7 @@ body {
     padding: 10px;
     background: #f5f5f5;
     min-height: 100vh;
+    color: #333;
 }
 
 #gameContainer {
@@ -51,6 +52,8 @@ body {
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
+    background: white;
+    color: #333;
 }
 
 button {
@@ -111,35 +114,30 @@ h1 {
     pointer-events: auto;
 }
 
-/* Left zone */
 .zone-left {
     left: 0;
     bottom: 25%;
     height: 50%;
 }
 
-/* Right zone */
 .zone-right {
     right: 0;
     bottom: 25%;
     height: 50%;
 }
 
-/* Jump zone - moved down from top */
 .zone-jump {
     left: 33.33%;
     right: 33.33%;
     top: 25%;
 }
 
-/* Down zone */
 .zone-down {
     left: 33.33%;
     right: 33.33%;
     bottom: 0;
 }
 
-/* Attack zone */
 .zone-attack {
     left: 33.33%;
     right: 33.33%;
@@ -170,23 +168,6 @@ h1 {
     background: rgba(255, 87, 34, 0.5);
 }
 
-/* Adjust button sizes for different screen sizes */
-@media (max-width: 768px) {
-    .control-btn {
-        width: 100px;
-        height: 100px;
-        font-size: 40px;
-    }
-}
-
-@media (max-width: 480px) {
-    .control-btn {
-        width: 80px;
-        height: 80px;
-        font-size: 32px;
-    }
-}
-
 .level-complete {
     position: fixed;
     top: 50%;
@@ -204,4 +185,78 @@ h1 {
 .level-complete button {
     margin-top: 15px;
     background: #4CAF50;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background: #1a1a1a;
+        color: #e0e0e0;
+    }
+
+    #gameContainer {
+        border-color: #555;
+        background: #2d2d2d;
+    }
+
+    .controls {
+        background: #2d2d2d;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .input-group {
+        background: #2d2d2d;
+        border-color: #444;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    #urlInput {
+        background: #333;
+        border-color: #444;
+        color: #e0e0e0;
+    }
+
+    button {
+        background: #ff5722;
+    }
+
+    button:hover {
+        background: #f4511e;
+    }
+
+    button:disabled {
+        background: #555;
+    }
+
+    h1 {
+        color: #ff7a50;
+    }
+
+    .control-btn {
+        background: rgba(255, 87, 34, 0.4);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .control-btn:active {
+        background: rgba(255, 87, 34, 0.6);
+    }
+
+    .level-complete {
+        background: rgba(0, 0, 0, 0.9);
+    }
+}
+
+@media (max-width: 768px) {
+    .control-btn {
+        width: 100px;
+        height: 100px;
+        font-size: 40px;
+    }
+}
+
+@media (max-width: 480px) {
+    .control-btn {
+        width: 80px;
+        height: 80px;
+        font-size: 32px;
+    }
 }
