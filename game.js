@@ -11,7 +11,9 @@ const game = {
         isAttacking: false,
         facingRight: true,
         attackDirection: 'right',
-        attackTimeout: null
+        attackTimeout: null,
+        animFrame: 0,
+        lastAnimTime: 0
     },
     blocks: [],
     keys: {},
@@ -24,13 +26,64 @@ const game = {
     heightScale: 1,
     levelComplete: false,
     totalBlocks: 0,
-    destroyedBlocks: 0
+    destroyedBlocks: 0,
+    effects: {
+        particles: [],
+        screenShake: { x: 0, y: 0, intensity: 0, duration: 0 },
+        lighting: { enabled: true, mouseX: 0, mouseY: 0 },
+        backgroundGradient: true,
+        particleSystem: true,
+        shadows: true
+    },
+    audio: {
+        enabled: false,
+        context: null,
+        sounds: {}
+    },
+    camera: { x: 0, y: 0 }
 };
 
 const GRAVITY = 0.5;
 const JUMP_FORCE = -16;
 const MOVE_SPEED = 8;
 const ATTACK_DURATION = 256;
+
+class Particle {
+    constructor(x, y, velX, velY, life, color, size = 3) {
+        this.x = x;
+        this.y = y;
+        this.velX = velX;
+        this.velY = velY;
+        this.life = life;
+        this.maxLife = life;
+        this.color = color;
+        this.size = size;
+        this.gravity = 0.1;
+    }
+    
+    update() {
+        this.x += this.velX;
+        this.y += this.velY;
+        this.velY += this.gravity;
+        this.life--;
+        this.velX *= 0.99;
+    }
+    
+    render(ctx) {
+        const alpha = this.life / this.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    
+    isDead() {
+        return this.life <= 0;
+    }
+}
 
 function isMobileDevice() {
     return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
@@ -185,6 +238,13 @@ function setupEventListeners() {
             e.preventDefault();
         }
     });
+    
+    // Mouse tracking for lighting effects
+    window.addEventListener('mousemove', e => {
+        const rect = game.ctx.canvas.getBoundingClientRect();
+        game.effects.lighting.mouseX = e.clientX - rect.left;
+        game.effects.lighting.mouseY = e.clientY - rect.top;
+    });
 
     window.addEventListener('keyup', e => {
         game.keys[e.key] = false;
@@ -330,6 +390,7 @@ function gameLoop() {
 
     updatePlayer();
     checkCollisions();
+    updateEffects();
     render();
     updateTimer();
 
@@ -337,6 +398,8 @@ function gameLoop() {
 }
 
 function updatePlayer() {
+    const now = Date.now();
+    
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
         game.player.facingRight = false;
@@ -346,6 +409,15 @@ function updatePlayer() {
             game.player.attackDirection = 'down';
         } else {
             game.player.attackDirection = 'left';
+        }
+        
+        if (now - game.player.lastAnimTime > 150) {
+            game.player.animFrame = (game.player.animFrame + 1) % 4;
+            game.player.lastAnimTime = now;
+        }
+        
+        if (Math.random() < 0.3) {
+            addDustParticle(game.player.x, game.player.y + game.player.height);
         }
     } else if (game.keys['ArrowRight']) {
         game.player.velX = MOVE_SPEED;
@@ -357,20 +429,42 @@ function updatePlayer() {
         } else {
             game.player.attackDirection = 'right';
         }
+        
+        if (now - game.player.lastAnimTime > 150) {
+            game.player.animFrame = (game.player.animFrame + 1) % 4;
+            game.player.lastAnimTime = now;
+        }
+        
+        if (Math.random() < 0.3) {
+            addDustParticle(game.player.x + game.player.width, game.player.y + game.player.height);
+        }
     } else if (game.keys['ArrowUp']) {
         game.player.attackDirection = 'up';
     } else if (game.keys['ArrowDown']) {
         game.player.attackDirection = 'down';
     }
-    else game.player.velX = 0;
+    else {
+        game.player.velX = 0;
+        game.player.animFrame = 0;
+    }
 
     if (game.keys[' '] && !game.player.isJumping) {
         game.player.velY = JUMP_FORCE;
         game.player.isJumping = true;
+        playSound('jump');
+        
+        for (let i = 0; i < 5; i++) {
+            addDustParticle(
+                game.player.x + Math.random() * game.player.width,
+                game.player.y + game.player.height,
+                2
+            );
+        }
     }
 
     if (game.keys['x'] && !game.player.isAttacking) {
         game.player.isAttacking = true;
+        playSound('attack');
         attackWithMachete();
         setTimeout(() => {
             game.player.isAttacking = false;
@@ -433,6 +527,103 @@ function checkCollisions() {
     }
 }
 
+function addDustParticle(x, y, count = 1) {
+    for (let i = 0; i < count; i++) {
+        const particle = new Particle(
+            x + (Math.random() - 0.5) * 10,
+            y + (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 2,
+            -Math.random() * 2,
+            30 + Math.random() * 20,
+            `rgba(139, 69, 19, ${0.6 + Math.random() * 0.4})`,
+            2 + Math.random() * 2
+        );
+        game.effects.particles.push(particle);
+    }
+}
+
+function addSparkParticle(x, y, color) {
+    for (let i = 0; i < 8; i++) {
+        const particle = new Particle(
+            x,
+            y,
+            (Math.random() - 0.5) * 8,
+            (Math.random() - 0.5) * 8,
+            20 + Math.random() * 10,
+            color || '#ffaa00',
+            1 + Math.random() * 2
+        );
+        game.effects.particles.push(particle);
+    }
+}
+
+function addScreenShake(intensity, duration) {
+    game.effects.screenShake.intensity = Math.max(game.effects.screenShake.intensity, intensity);
+    game.effects.screenShake.duration = Math.max(game.effects.screenShake.duration, duration);
+}
+
+function initAudio() {
+    if (game.audio.enabled) return;
+    
+    try {
+        game.audio.context = new (window.AudioContext || window.webkitAudioContext)();
+        game.audio.enabled = true;
+        
+        game.audio.sounds.jump = createSyntheticSound(220, 0.1, 'sine');
+        game.audio.sounds.attack = createSyntheticSound(440, 0.15, 'square');
+        game.audio.sounds.hit = createSyntheticSound(330, 0.1, 'triangle');
+        game.audio.sounds.complete = createSyntheticSound(523, 0.3, 'sine');
+    } catch (e) {
+        console.log('Audio not available');
+        game.audio.enabled = false;
+    }
+}
+
+function createSyntheticSound(frequency, duration, type = 'sine') {
+    return () => {
+        if (!game.audio.enabled || !game.audio.context) return;
+        
+        const oscillator = game.audio.context.createOscillator();
+        const gainNode = game.audio.context.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(game.audio.context.destination);
+        
+        oscillator.frequency.setValueAtTime(frequency, game.audio.context.currentTime);
+        oscillator.type = type;
+        
+        gainNode.gain.setValueAtTime(0.3, game.audio.context.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, game.audio.context.currentTime + duration);
+        
+        oscillator.start(game.audio.context.currentTime);
+        oscillator.stop(game.audio.context.currentTime + duration);
+    };
+}
+
+function playSound(soundName) {
+    if (game.audio.enabled && game.audio.sounds[soundName]) {
+        game.audio.sounds[soundName]();
+    }
+}
+
+function updateEffects() {
+    game.effects.particles = game.effects.particles.filter(particle => {
+        particle.update();
+        return !particle.isDead();
+    });
+    
+    if (game.effects.screenShake.duration > 0) {
+        game.effects.screenShake.x = (Math.random() - 0.5) * game.effects.screenShake.intensity;
+        game.effects.screenShake.y = (Math.random() - 0.5) * game.effects.screenShake.intensity;
+        game.effects.screenShake.duration--;
+        game.effects.screenShake.intensity *= 0.95;
+    } else {
+        game.effects.screenShake.x = 0;
+        game.effects.screenShake.y = 0;
+        game.effects.screenShake.intensity = 0;
+    }
+}
+
 function attackWithMachete() {
     const attackRange = 50;
     let attackBox;
@@ -474,6 +665,7 @@ function attackWithMachete() {
 
     const initialBlockCount = game.blocks.length;
     const blocksBeforeAttack = game.blocks.length;
+    let hitSomething = false;
 
     // Check for destroyed blocks and create tooltips
     game.blocks.forEach(block => {
@@ -485,6 +677,25 @@ function attackWithMachete() {
             
             block.destroyed = true;
             block.destroyTime = Date.now();
+            hitSomething = true;
+            
+            const centerX = block.x + block.width / 2;
+            const centerY = block.y + block.height / 2;
+            
+            addSparkParticle(centerX, centerY, block.fill);
+            
+            for (let i = 0; i < 6; i++) {
+                const debris = new Particle(
+                    centerX + (Math.random() - 0.5) * block.width,
+                    centerY + (Math.random() - 0.5) * block.height,
+                    (Math.random() - 0.5) * 6,
+                    -Math.random() * 4 - 2,
+                    40 + Math.random() * 20,
+                    block.fill || '#ff7f00',
+                    3 + Math.random() * 4
+                );
+                game.effects.particles.push(debris);
+            }
             
             if (block.tooltipText) {
                 // Find similar positioned tooltips
@@ -508,6 +719,11 @@ function attackWithMachete() {
             }
         }
     });
+    
+    if (hitSomething) {
+        addScreenShake(5, 8);
+        playSound('hit');
+    }
 
     // Filter out destroyed blocks
     game.blocks = game.blocks.filter(block => !block.destroyed);
@@ -516,11 +732,16 @@ function attackWithMachete() {
     updateBlockCounter();
 
     if (game.blocks.length === 0 && blocksBeforeAttack > 0) {
+        playSound('complete');
         completeLevelWithFlame();
     }
 }
 
-const playerSpriteSVG = `
+function createAnimatedPlayerSprite(frame) {
+    const legOffset = Math.sin(frame * 0.5) * 2;
+    const armSwing = Math.sin(frame * 0.3) * 1;
+    
+    return `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
     <!-- Head (Profile View) -->
     <rect x="14" y="5" width="20" height="20" rx="4" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
@@ -545,21 +766,24 @@ const playerSpriteSVG = `
     <path d="M21 28 L21 40 M27 28 L27 40" stroke="#000" stroke-width="1"/>
     <!-- Belt -->
     <rect x="18" y="40" width="14" height="2" fill="#222" stroke="#000" stroke-width="1.5"/>
-    <!-- Legs -->
-    <rect x="20" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
-    <rect x="25" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
+    <!-- Animated Legs -->
+    <rect x="${20 + legOffset}" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
+    <rect x="${25 - legOffset}" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
     <!-- Boots -->
-    <rect x="20" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
-    <rect x="25" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
+    <rect x="${20 + legOffset}" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
+    <rect x="${25 - legOffset}" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
     <!-- Arms -->
-    <!-- Front Arm -->
-    <rect x="31" y="26" width="6" height="10" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
-    <rect x="31" y="34" width="6" height="4" fill="#555" stroke="#000" stroke-width="1.5"/>
-    <!-- Back Arm -->
-    <path d="M18 26 Q15 30 18 36" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
-    <path d="M16 34 Q16 36 18 38" fill="#555" stroke="#000" stroke-width="1.5"/>
+    <!-- Animated Front Arm -->
+    <rect x="${31 + armSwing}" y="${26 + armSwing}" width="6" height="10" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
+    <rect x="${31 + armSwing}" y="${34 + armSwing}" width="6" height="4" fill="#555" stroke="#000" stroke-width="1.5"/>
+    <!-- Animated Back Arm -->
+    <path d="M${18 - armSwing} ${26 - armSwing} Q${15 - armSwing} ${30 - armSwing} ${18 - armSwing} ${36 - armSwing}" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
+    <path d="M${16 - armSwing} ${34 - armSwing} Q${16 - armSwing} ${36 - armSwing} ${18 - armSwing} ${38 - armSwing}" fill="#555" stroke="#000" stroke-width="1.5"/>
 </svg>
 `;
+}
+
+const playerSpriteSVG = createAnimatedPlayerSprite(0);
 
 const playerSprite = new Image();
 playerSprite.src = 'data:image/svg+xml;base64,' + btoa(playerSpriteSVG);
@@ -626,21 +850,71 @@ macheteSlashImage.onload = function () {
 
 function render() {
     const ctx = game.ctx;
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.save();
+    
+    ctx.translate(game.effects.screenShake.x, game.effects.screenShake.y);
+    
+    ctx.clearRect(-10, -10, ctx.canvas.width + 20, ctx.canvas.height + 20);
 
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    if (game.effects.backgroundGradient) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+        gradient.addColorStop(0, '#1a1a2e');
+        gradient.addColorStop(0.5, '#16213e');
+        gradient.addColorStop(1, '#0f0f0f');
+        ctx.fillStyle = gradient;
+    } else {
+        ctx.fillStyle = '#f0f0f0';
+    }
+    ctx.fillRect(-10, -10, ctx.canvas.width + 20, ctx.canvas.height + 20);
+    
+    if (game.effects.lighting.enabled) {
+        const lightGradient = ctx.createRadialGradient(
+            game.effects.lighting.mouseX, game.effects.lighting.mouseY, 0,
+            game.effects.lighting.mouseX, game.effects.lighting.mouseY, 200
+        );
+        lightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
+        lightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = lightGradient;
+        ctx.fillRect(-10, -10, ctx.canvas.width + 20, ctx.canvas.height + 20);
+    }
 
-    ctx.fillStyle = '#666';
+    const floorGradient = ctx.createLinearGradient(0, ctx.canvas.height - 10, 0, ctx.canvas.height);
+    floorGradient.addColorStop(0, '#444');
+    floorGradient.addColorStop(1, '#222');
+    ctx.fillStyle = floorGradient;
     ctx.fillRect(0, ctx.canvas.height - 10, ctx.canvas.width, 10);
 
-    // Render blocks
+    // Render blocks with enhanced visuals
     game.blocks.forEach(block => {
+        if (game.effects.shadows) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(block.x + 2, block.y + 2, block.width, block.height);
+        }
+        
         ctx.fillStyle = block.fill || '#ff7f00';
         ctx.fillRect(block.x, block.y, block.width, block.height);
+        
+        const blockGradient = ctx.createLinearGradient(block.x, block.y, block.x, block.y + block.height);
+        const baseColor = block.fill || '#ff7f00';
+        blockGradient.addColorStop(0, baseColor);
+        blockGradient.addColorStop(1, darkenColor(baseColor, 0.3));
+        ctx.fillStyle = blockGradient;
+        ctx.fillRect(block.x, block.y, block.width, block.height);
 
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 1;
         ctx.strokeRect(block.x, block.y, block.width, block.height);
+        
+        const highlight = ctx.createLinearGradient(block.x, block.y, block.x, block.y + 3);
+        highlight.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+        highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = highlight;
+        ctx.fillRect(block.x, block.y, block.width, 3);
+    });
+    
+    // Render particles
+    game.effects.particles.forEach(particle => {
+        particle.render(ctx);
     });
 
     // Render active tooltips
@@ -673,14 +947,60 @@ function render() {
         return tooltip.opacity > 0;
     });
 
+    // Render player shadow
+    if (game.effects.shadows) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(
+            game.player.x + game.player.width/2 + 1,
+            game.player.y + game.player.height + 5,
+            game.player.width/2, 4, 0, 0, Math.PI * 2
+        );
+        ctx.fill();
+    }
+
+    // Create animated sprite for current frame
+    const animatedSprite = new Image();
+    animatedSprite.src = 'data:image/svg+xml;base64,' + btoa(createAnimatedPlayerSprite(game.player.animFrame));
+    
     // Render player
     ctx.save();
     if (!game.player.facingRight) {
         ctx.translate(game.player.x + game.player.width, game.player.y);
         ctx.scale(-1, 1);
-        ctx.drawImage(playerSprite, 0, 0, game.player.width, game.player.height);
+        if (animatedSprite.complete) {
+            ctx.drawImage(animatedSprite, 0, 0, game.player.width, game.player.height);
+        } else {
+            ctx.drawImage(playerSprite, 0, 0, game.player.width, game.player.height);
+        }
     } else {
-        ctx.drawImage(playerSprite, game.player.x, game.player.y, game.player.width, game.player.height);
+        if (animatedSprite.complete) {
+            ctx.drawImage(animatedSprite, game.player.x, game.player.y, game.player.width, game.player.height);
+        } else {
+            ctx.drawImage(playerSprite, game.player.x, game.player.y, game.player.width, game.player.height);
+        }
+    }
+    ctx.restore();
+    
+    // Add subtle glow around player
+    ctx.save();
+    ctx.shadowColor = '#ffaa00';
+    ctx.shadowBlur = game.player.isAttacking ? 15 : 5;
+    ctx.globalAlpha = 0.6;
+    if (!game.player.facingRight) {
+        ctx.translate(game.player.x + game.player.width, game.player.y);
+        ctx.scale(-1, 1);
+        if (animatedSprite.complete) {
+            ctx.drawImage(animatedSprite, 0, 0, game.player.width, game.player.height);
+        } else {
+            ctx.drawImage(playerSprite, 0, 0, game.player.width, game.player.height);
+        }
+    } else {
+        if (animatedSprite.complete) {
+            ctx.drawImage(animatedSprite, game.player.x, game.player.y, game.player.width, game.player.height);
+        } else {
+            ctx.drawImage(playerSprite, game.player.x, game.player.y, game.player.width, game.player.height);
+        }
     }
     ctx.restore();
 
@@ -715,10 +1035,27 @@ function render() {
         ctx.translate(slashX + tileSize / 2, slashY + tileSize / 2);
         ctx.rotate(rotation);
 
+        ctx.save();
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 10;
+        ctx.globalAlpha = 0.9;
         ctx.drawImage(macheteSlashImage, -tileSize / 2, -tileSize / 2, tileSize, tileSize / 3);
+        ctx.restore();
 
         ctx.restore();
     }
+    
+    ctx.restore();
+}
+
+function darkenColor(color, factor) {
+    if (color.startsWith('#')) {
+        const r = parseInt(color.substr(1, 2), 16);
+        const g = parseInt(color.substr(3, 2), 16);
+        const b = parseInt(color.substr(5, 2), 16);
+        return `rgb(${Math.floor(r * (1 - factor))}, ${Math.floor(g * (1 - factor))}, ${Math.floor(b * (1 - factor))})`;
+    }
+    return color;
 }
 
 function updateTimer() {
@@ -731,6 +1068,8 @@ function updateTimer() {
 function startGame() {
     game.isRunning = true;
     game.startTime = Date.now();
+    
+    initAudio();
 
     game.player.x = 50;
     game.player.y = 0;
