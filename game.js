@@ -251,7 +251,11 @@ function initThree() {
     const oldCanvas = container.querySelector('canvas');
     if (oldCanvas) oldCanvas.remove();
 
-    const lowEnd = detectLowEndGPU();
+    // ?quality=high|low overrides GPU autodetection
+    const qualityParam = new URLSearchParams(window.location.search).get('quality');
+    let lowEnd = detectLowEndGPU();
+    if (qualityParam === 'high') lowEnd = false;
+    if (qualityParam === 'low') lowEnd = true;
     const canvas = document.createElement('canvas');
     const renderer = new THREE.WebGLRenderer({ antialias: !lowEnd, canvas });
     game.quality = lowEnd ? 'low' : 'high';
