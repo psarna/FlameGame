@@ -78,9 +78,10 @@ const MOVE_SPEED = 8;
 const ATTACK_DURATION = 256;
 const ATTACK_RANGE = 55;
 const BLOCK_DEPTH = 90;
+const SPAWN_MARGIN = 200; // empty runway left of the flame graph
 const COMBO_WINDOW_MS = 1400;
-const CAMERA_DISTANCE = 470;
-const CAMERA_HEIGHT = 130;
+const CAMERA_DISTANCE = 940;
+const CAMERA_HEIGHT = 170;
 
 // ---------------------------------------------------------------------------
 // Legacy 2D particle (kept for game-state contract / tests; visuals are 3D)
@@ -270,7 +271,7 @@ function initThree() {
 
     const scene = new THREE.Scene();
     scene.background = makeSkyTexture();
-    scene.fog = new THREE.Fog(0x1a0c28, 900, 3200);
+    scene.fog = new THREE.Fog(0x1a0c28, 1800, 5600);
 
     const camera = new THREE.PerspectiveCamera(
         50,
@@ -290,9 +291,9 @@ function initThree() {
     directional.shadow.mapSize.height = 2048;
     directional.shadow.camera.near = 50;
     directional.shadow.camera.far = 2200;
-    directional.shadow.camera.left = -700;
-    directional.shadow.camera.right = 700;
-    directional.shadow.camera.top = 700;
+    directional.shadow.camera.left = -1200;
+    directional.shadow.camera.right = 1200;
+    directional.shadow.camera.top = 1100;
     directional.shadow.camera.bottom = -700;
     directional.shadow.bias = -0.0004;
     scene.add(directional);
@@ -712,7 +713,8 @@ function loadSVGContent(svgContent) {
 
     game.scale = (containerWidth * 1.6) / maxRight;
     game.heightScale = (containerHeight * 1.3) / maxBottom;
-    game.world.width = maxRight * game.scale;
+    // clear runway on the left so the knight never spawns inside the graph
+    game.world.width = maxRight * game.scale + SPAWN_MARGIN;
     game.world.height = maxBottom * game.heightScale;
 
     // dispose previous level
@@ -756,7 +758,7 @@ function loadSVGContent(svgContent) {
 
         const scaledWidth = width * game.scale;
         const scaledHeight = height * game.heightScale;
-        const xWorld = x * game.scale;
+        const xWorld = x * game.scale + SPAWN_MARGIN;
         const yWorld = (maxBottom - (y + height)) * game.heightScale;
 
         const color = rect.getAttribute('fill') || '#ff7f00';
@@ -847,8 +849,8 @@ async function loadSVG(source, isUrl = false) {
 // Input
 // ---------------------------------------------------------------------------
 const KEY_ALIASES = {
-    a: 'ArrowLeft', d: 'ArrowRight', w: 'ArrowUp', s: 'ArrowDown',
-    A: 'ArrowLeft', D: 'ArrowRight', W: 'ArrowUp', S: 'ArrowDown',
+    a: 'ArrowLeft', d: 'ArrowRight', w: ' ', s: 'ArrowDown',
+    A: 'ArrowLeft', D: 'ArrowRight', W: ' ', S: 'ArrowDown',
     j: 'x', J: 'x', X: 'x'
 };
 
@@ -1461,13 +1463,10 @@ function render(delta) {
 
     if (game.playerMesh) {
         game.playerMesh.position.set(playerCenterX, p.y, BLOCK_DEPTH / 2 - p.depth / 2);
-        // face movement direction; face the camera when idle
-        let targetYaw = 0;
-        if (Math.abs(p.velX) > 0.5 || p.isJumping || p.isAttacking) {
-            targetYaw = p.facingRight ? Math.PI / 2 : -Math.PI / 2;
-            // slight tilt toward camera so the knight reads better
-            targetYaw *= 0.82;
-        }
+        // always face the direction of travel, never the camera:
+        // a sideways knight reads instantly as "platformer"
+        // (slight tilt toward the camera so the model still has depth)
+        const targetYaw = (p.facingRight ? Math.PI / 2 : -Math.PI / 2) * 0.86;
         const dy = targetYaw - game.playerMesh.rotation.y;
         game.playerMesh.rotation.y += dy * Math.min(delta * 14, 1);
     }
