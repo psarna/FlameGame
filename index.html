@@ -2,7 +2,17 @@
 <html>
 <head>
     <title>FlameGame</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" href="style.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
 </head>
 <body>
     <h1>FlameGame</h1>
@@ -27,15 +37,21 @@
         <span id="timer">Time: 0.0s</span>
         <span id="bestTime">Best: --</span>
         <span id="blockCounter">Blocks: 0/0</span>
+        <span id="combo"></span>
+        <span id="blockName"></span>
         <span id="currentLevel"></span>
     </div>
-    <div id="gameContainer"></div>
-    <div class="controls">
-        <span>Desktop: Arrow keys to move, Space to jump, X to attack (hold up/down for attack direction); Mobile: Touch the on-screen buttons</span>
+    <div id="gameContainer">
+        <div id="loadingOverlay"><div class="spinner"></div><span>Summoning the knight…</span></div>
     </div>
-    <span>Made by <a href="https://bio.sarna.dev">sarna</a>. 
-        This game costs me $0 a month to host, because it's just low quality javascript hosted on GitHub pages. 
-        Please consider <a href="https://github.com/sponsors/psarna">donating</a> to help me meet my $0/month goal!</span>
+    <div class="controls">
+        <span>Desktop: ←/→ or A/D to run, Space to jump, X / J to swing the sword (hold ↑/↓ to aim the slash).
+        Down-slash mid-air to bounce! Mobile: touch the on-screen buttons.</span>
+    </div>
+    <span class="footer-note">Made by <a href="https://bio.sarna.dev">sarna</a>.
+        This game costs me $0 a month to host, because it's just low quality javascript hosted on GitHub pages.
+        Please consider <a href="https://github.com/sponsors/psarna">donating</a> to help me meet my $0/month goal!
+        Knight model: <a href="https://kaylousberg.com">KayKit</a> (CC0).</span>
 
     <div id="mobileControls">
         <div class="control-zone zone-left">

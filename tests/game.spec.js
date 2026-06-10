@@ -95,19 +95,25 @@ test.describe('FlameGame', () => {
 
   test('should start timer when game starts', async ({ page }) => {
     await page.locator('#surpriseMe').click();
+    // wait until the requested level has actually loaded and the game is running,
+    // otherwise the timer legitimately resets mid-test when the level swaps in
+    await page.waitForFunction(() =>
+      window.game && window.game.isRunning && window.game.totalBlocks > 0 &&
+      window.game.pendingLoads === 0,
+      null, { timeout: 30000 });
     await page.waitForTimeout(500);
-    
+
     const initialTimer = await page.locator('#timer').textContent();
     expect(initialTimer).toMatch(/Time: \d+\.\d+s/);
-    
+
     await page.waitForTimeout(1000);
-    
+
     const laterTimer = await page.locator('#timer').textContent();
     expect(laterTimer).toMatch(/Time: \d+\.\d+s/);
-    
+
     const initialTime = parseFloat(initialTimer.match(/Time: (\d+\.\d+)s/)[1]);
     const laterTime = parseFloat(laterTimer.match(/Time: (\d+\.\d+)s/)[1]);
-    
+
     expect(laterTime).toBeGreaterThan(initialTime);
   });
 

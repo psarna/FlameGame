@@ -1,0 +1,13 @@
+<?xml version="1.0" standalone="no"?>
+<svg version="1.1" width="400" height="200" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="100%" height="100%" fill="url(#background)"/>
+<g onmouseover="s('root (3 samples, 100%)')">
+<rect x="10" y="184" width="380" height="16" fill="rgb(227,82,12)"/>
+</g>
+<g onmouseover="s('child_a (2 samples, 66%)')">
+<rect x="10" y="168" width="250" height="16" fill="rgb(240,125,30)"/>
+</g>
+<g onmouseover="s('leaf_hot (1 samples, 33%)')">
+<rect x="10" y="152" width="120" height="16" fill="rgb(250,60,40)"/>
+</g>
+</svg>
