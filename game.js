@@ -1,10 +1,11 @@
-
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 const game = {
     player: {
         x: 100,
         y: 100,
         width: 30,
         height: 50,
+        depth: 20,
         velX: 0,
         velY: 0,
         isJumping: false,
@@ -21,7 +22,12 @@ const game = {
     startTime: 0,
     currentTime: 0,
     bestTime: localStorage.getItem('bestTime') || Infinity,
-    ctx: null,
+    renderer: null,
+    scene: null,
+    camera: null,
+    playerMesh: null,
+    floorMesh: null,
+    world: { width: 0, height: 0 },
     scale: 1,
     heightScale: 1,
     levelComplete: false,
@@ -40,13 +46,16 @@ const game = {
         context: null,
         sounds: {}
     },
-    camera: { x: 0, y: 0 }
+    cameraShake: { x: 0, y: 0, z: 0 }
 };
 
-const GRAVITY = 0.5;
-const JUMP_FORCE = -16;
+window.game = game;
+
+const GRAVITY = 0.7;
+const JUMP_FORCE = 16;
 const MOVE_SPEED = 8;
 const ATTACK_DURATION = 256;
+const BLOCK_DEPTH = 24;
 
 class Particle {
     constructor(x, y, velX, velY, life, color, size = 3) {
@@ -60,75 +69,169 @@ class Particle {
         this.size = size;
         this.gravity = 0.1;
     }
-    
+
     update() {
         this.x += this.velX;
         this.y += this.velY;
-        this.velY += this.gravity;
+        this.velY -= this.gravity;
         this.life--;
         this.velX *= 0.99;
     }
-    
-    render(ctx) {
-        const alpha = this.life / this.maxLife;
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-    
+
     isDead() {
         return this.life <= 0;
     }
 }
 
 function isMobileDevice() {
-    return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+    return (typeof window.orientation !== 'undefined') || (navigator.userAgent.indexOf('IEMobile') !== -1);
 }
 
 // The originals! Huge tribute to Brendan Gregg's FlameGraphs
 const levels = [
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/brkbytes-mysql.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-syscalls.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-ipnet-diff.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mixedmode-flamegraph-java.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-qemu-both.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/io-gzip.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-bash.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-broken.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-grep.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-tcpfuse.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tar.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql-filt.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-zoomable.html",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/io-mysql.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-busy.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-working.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-ipdce.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-iozone.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tcpsend.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/hotcold-kernelthread.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/mallocbytes-bash.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-idle.svg",
-    "https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/README"
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/brkbytes-mysql.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-syscalls.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-ipnet-diff.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mixedmode-flamegraph-java.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-qemu-both.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/io-gzip.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-bash.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-broken.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-grep.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-tcpfuse.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tar.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql-filt.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-zoomable.html',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/io-mysql.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-busy.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-working.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-ipdce.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-iozone.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tcpsend.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/hotcold-kernelthread.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/mallocbytes-bash.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-idle.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/palette-example-working.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-illumos-ipdce.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-iozone.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-linux-tcpsend.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/cpu-mysql.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/hotcold-kernelthread.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/mallocbytes-bash.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/off-mysql-idle.svg',
+    'https://raw.githubusercontent.com/brendangregg/FlameGraph/refs/heads/master/demos/README'
 ];
-var currentLevel = '';
+let currentLevel = '';
 
-
-function init() {
+function initThree() {
     const container = document.getElementById('gameContainer');
     container.innerHTML = '';
 
     const canvas = document.createElement('canvas');
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-    container.appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
 
-    game.ctx = canvas.getContext('2d');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f111a);
+    scene.fog = new THREE.Fog(0x0f111a, 400, 2000);
+
+    const camera = new THREE.PerspectiveCamera(
+        45,
+        container.clientWidth / container.clientHeight,
+        1,
+        5000
+    );
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+    scene.add(ambient);
+
+    const directional = new THREE.DirectionalLight(0xffffff, 0.9);
+    directional.position.set(200, 500, 300);
+    directional.castShadow = true;
+    directional.shadow.mapSize.width = 2048;
+    directional.shadow.mapSize.height = 2048;
+    directional.shadow.camera.near = 50;
+    directional.shadow.camera.far = 1500;
+    scene.add(directional);
+
+    const pointLight = new THREE.PointLight(0xffddaa, 0.6, 800, 2);
+    pointLight.position.set(0, 120, 200);
+    scene.add(pointLight);
+
+    game.renderer = renderer;
+    game.scene = scene;
+    game.camera = camera;
+    game.lights = { ambient, directional, pointLight };
+
+    createPlayerMesh();
+}
+
+function createPlayerMesh() {
+    if (game.playerMesh) {
+        game.scene.remove(game.playerMesh);
+    }
+
+    const group = new THREE.Group();
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2d6bff, roughness: 0.4, metalness: 0.1 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xf4c7a3, roughness: 0.5, metalness: 0.05 });
+    const bootMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6, metalness: 0.05 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(24, 30, game.player.depth * 0.7), bodyMat);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    body.position.set(0, 10, 0);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(9, 16, 16), headMat);
+    head.castShadow = true;
+    head.position.set(0, 28, 0);
+
+    const boots = new THREE.Mesh(new THREE.BoxGeometry(24, 6, game.player.depth * 0.7), bootMat);
+    boots.castShadow = true;
+    boots.position.set(0, -12, 0);
+
+    group.add(body);
+    group.add(head);
+    group.add(boots);
+
+    game.playerMesh = group;
+    game.scene.add(group);
+}
+
+function updateCamera() {
+    if (!game.camera || !game.renderer) return;
+
+    const worldWidth = game.world.width || game.renderer.domElement.clientWidth;
+    const worldHeight = game.world.height || game.renderer.domElement.clientHeight;
+    const distance = Math.max(worldWidth, worldHeight) * 1.1;
+
+    game.camera.position.set(worldWidth * 0.5, worldHeight * 0.7, distance);
+    game.camera.lookAt(new THREE.Vector3(worldWidth * 0.5, worldHeight * 0.45, 0));
+}
+
+function updateFloor() {
+    if (!game.scene) return;
+    if (game.floorMesh) {
+        game.scene.remove(game.floorMesh);
+    }
+
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x20252f, roughness: 0.8, metalness: 0.0 });
+    const floorGeo = new THREE.BoxGeometry(game.world.width || 1000, 10, 200);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.receiveShadow = true;
+    floor.position.set((game.world.width || 1000) / 2, -5, 0);
+
+    game.floorMesh = floor;
+    game.scene.add(floor);
+}
+
+function init() {
+    initThree();
     setupEventListeners();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -141,7 +244,7 @@ function init() {
     }
     loadSVG(currentLevel, true);
 
-    return game.ctx;
+    return game.renderer;
 }
 
 function loadSVGContent(svgContent) {
@@ -151,8 +254,8 @@ function loadSVGContent(svgContent) {
 
     const validRects = rects.filter(rect => rect.getAttribute('width') !== '100%' && rect.getAttribute('fill') !== 'url(#background)');
 
-    const containerWidth = game.ctx.canvas.width;
-    const containerHeight = game.ctx.canvas.height;
+    const containerWidth = game.renderer.domElement.clientWidth;
+    const containerHeight = game.renderer.domElement.clientHeight;
 
     let maxRight = 0;
     let maxBottom = 0;
@@ -165,6 +268,14 @@ function loadSVGContent(svgContent) {
 
     game.scale = containerWidth / maxRight;
     game.heightScale = containerHeight / maxBottom;
+    game.world.width = maxRight * game.scale;
+    game.world.height = maxBottom * game.heightScale;
+
+    game.blocks.forEach(block => {
+        if (block.mesh) {
+            game.scene.remove(block.mesh);
+        }
+    });
 
     game.blocks = validRects.map(rect => {
         const x = parseFloat(rect.getAttribute('x'));
@@ -179,29 +290,45 @@ function loadSVGContent(svgContent) {
             tooltip = tooltip.substring(tooltip.indexOf('s(') + 3, tooltip.indexOf(')'));
         }
 
+        const scaledWidth = width * game.scale;
+        const scaledHeight = height * game.heightScale;
+        const xWorld = x * game.scale;
+        const yWorld = (maxBottom - (y + height)) * game.heightScale;
+
+        const color = rect.getAttribute('fill') || '#ff7f00';
+        const material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(color),
+            roughness: 0.5,
+            metalness: 0.1
+        });
+
+        const geometry = new THREE.BoxGeometry(scaledWidth, scaledHeight, BLOCK_DEPTH);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.position.set(xWorld + scaledWidth / 2, yWorld + scaledHeight / 2, 0);
+        game.scene.add(mesh);
+
         return {
-            x: x * game.scale,
-            y: y * game.heightScale,
-            width: width * game.scale,
-            height: height * game.heightScale,
-            fill: rect.getAttribute('fill'),
+            x: xWorld,
+            y: yWorld,
+            width: scaledWidth,
+            height: scaledHeight,
+            depth: BLOCK_DEPTH,
+            fill: color,
             tooltipText: tooltip,
             destroyed: false,
-            destroyTime: 0
+            destroyTime: 0,
+            mesh
         };
     });
-
-    // Add activeTooltips array to game object if it doesn't exist
-    game.activeTooltips = game.activeTooltips || [];
-    // Add tooltip spacing configuration
-    game.tooltipConfig = {
-        baseHeight: 12,     // Height of each tooltip
-        verticalSpacing: 4  // Space between tooltips
-    };
 
     game.totalBlocks = game.blocks.length;
     game.destroyedBlocks = 0;
     updateBlockCounter();
+
+    updateFloor();
+    updateCamera();
 
     render();
     cancelAnimationFrame(loopId);
@@ -231,17 +358,15 @@ async function loadSVG(source, isUrl = false) {
 }
 
 function setupEventListeners() {
-    // Desktop keyboard controls
     window.addEventListener('keydown', e => {
         game.keys[e.key] = true;
         if (e.key === ' ' || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
             e.preventDefault();
         }
     });
-    
-    // Mouse tracking for lighting effects
+
     window.addEventListener('mousemove', e => {
-        const rect = game.ctx.canvas.getBoundingClientRect();
+        const rect = game.renderer.domElement.getBoundingClientRect();
         game.effects.lighting.mouseX = e.clientX - rect.left;
         game.effects.lighting.mouseY = e.clientY - rect.top;
     });
@@ -250,11 +375,18 @@ function setupEventListeners() {
         game.keys[e.key] = false;
     });
 
-    // Mobile controls setup
+    window.addEventListener('resize', () => {
+        const container = document.getElementById('gameContainer');
+        if (!game.renderer || !game.camera) return;
+        game.renderer.setSize(container.clientWidth, container.clientHeight);
+        game.camera.aspect = container.clientWidth / container.clientHeight;
+        game.camera.updateProjectionMatrix();
+        updateCamera();
+    });
+
     if (isMobileDevice()) {
         document.getElementById('mobileControls').style.display = 'block';
 
-        // Setup for movement controls
         const setupTouchControl = (elementId, keyToSimulate) => {
             const element = document.getElementById(elementId);
             let touchStarted = false;
@@ -280,11 +412,9 @@ function setupEventListeners() {
             });
         };
 
-        // Setup left/right movement
         setupTouchControl('leftBtn', 'ArrowLeft');
         setupTouchControl('rightBtn', 'ArrowRight');
 
-        // Special handling for jump button - combines up arrow and space
         const jumpBtn = document.getElementById('jumpBtn');
         let jumpTouchStarted = false;
 
@@ -299,7 +429,7 @@ function setupEventListeners() {
                 attackWithMachete();
                 setTimeout(() => {
                     game.player.isAttacking = false;
-                }, ATTACK_DURATION * 3); // longer for mobile
+                }, ATTACK_DURATION * 3);
             }
         }, { passive: false });
 
@@ -343,7 +473,6 @@ function setupEventListeners() {
         }, { passive: false });
     }
 
-    // Previous file and URL input listeners remain the same
     document.getElementById('fileInput').addEventListener('change', e => {
         if (e.target.files[0]) {
             loadSVG(e.target.files[0]);
@@ -356,9 +485,9 @@ function setupEventListeners() {
             loadSVG(url, true);
         }
     });
+
     document.getElementById('surpriseMe').addEventListener('click', () => {
         loadSVG(levels[Math.floor(Math.random() * levels.length)], true);
-
     });
 }
 
@@ -366,25 +495,23 @@ function completeLevelWithFlame() {
     game.levelComplete = true;
     game.isRunning = false;
 
-    // Update best time if current time is better
     if (game.currentTime < game.bestTime) {
         game.bestTime = game.currentTime;
         localStorage.setItem('bestTime', game.bestTime);
         document.getElementById('bestTime').textContent = `Best: ${game.bestTime.toFixed(1)}s`;
     }
 
-    // Create completion message
     const completeDiv = document.createElement('div');
     completeDiv.className = 'level-complete';
     completeDiv.innerHTML = `
-            <h2>🔥 Level Complete! 🔥</h2>
+            <h2>Level Complete</h2>
             <p>Time: ${game.currentTime.toFixed(1)}s</p>
             <button onclick="resetGame()">Play Again</button>
         `;
     document.body.appendChild(completeDiv);
 }
 
-var loopId = 0;
+let loopId = 0;
 function gameLoop() {
     if (!game.isRunning) return;
 
@@ -399,7 +526,7 @@ function gameLoop() {
 
 function updatePlayer() {
     const now = Date.now();
-    
+
     if (game.keys['ArrowLeft']) {
         game.player.velX = -MOVE_SPEED;
         game.player.facingRight = false;
@@ -410,12 +537,12 @@ function updatePlayer() {
         } else {
             game.player.attackDirection = 'left';
         }
-        
+
         if (now - game.player.lastAnimTime > 150) {
             game.player.animFrame = (game.player.animFrame + 1) % 4;
             game.player.lastAnimTime = now;
         }
-        
+
         if (Math.random() < 0.3) {
             addDustParticle(game.player.x, game.player.y + game.player.height);
         }
@@ -429,12 +556,12 @@ function updatePlayer() {
         } else {
             game.player.attackDirection = 'right';
         }
-        
+
         if (now - game.player.lastAnimTime > 150) {
             game.player.animFrame = (game.player.animFrame + 1) % 4;
             game.player.lastAnimTime = now;
         }
-        
+
         if (Math.random() < 0.3) {
             addDustParticle(game.player.x + game.player.width, game.player.y + game.player.height);
         }
@@ -442,8 +569,7 @@ function updatePlayer() {
         game.player.attackDirection = 'up';
     } else if (game.keys['ArrowDown']) {
         game.player.attackDirection = 'down';
-    }
-    else {
+    } else {
         game.player.velX = 0;
         game.player.animFrame = 0;
     }
@@ -452,7 +578,7 @@ function updatePlayer() {
         game.player.velY = JUMP_FORCE;
         game.player.isJumping = true;
         playSound('jump');
-        
+
         for (let i = 0; i < 5; i++) {
             addDustParticle(
                 game.player.x + Math.random() * game.player.width,
@@ -471,23 +597,21 @@ function updatePlayer() {
         }, ATTACK_DURATION);
     }
 
-    game.player.velY += GRAVITY;
+    game.player.velY -= GRAVITY;
     game.player.x += game.player.velX;
     game.player.y += game.player.velY;
 
     if (game.player.x < 0) game.player.x = 0;
-    if (game.player.x + game.player.width > game.ctx.canvas.width) {
-        game.player.x = game.ctx.canvas.width - game.player.width;
+    if (game.player.x + game.player.width > game.world.width) {
+        game.player.x = Math.max(0, game.world.width - game.player.width);
     }
 }
 
 function checkCollisions() {
     game.player.isJumping = true;
 
-    // Floor collision
-    const floorY = game.ctx.canvas.height - game.player.height;
-    if (game.player.y > floorY) {
-        game.player.y = floorY;
+    if (game.player.y < 0) {
+        game.player.y = 0;
         game.player.velY = 0;
         game.player.isJumping = false;
     }
@@ -498,29 +622,23 @@ function checkCollisions() {
             game.player.y + game.player.height > block.y &&
             game.player.y < block.y + block.height) {
 
-            // Calculate overlap on each side
             const overlapLeft = (game.player.x + game.player.width) - block.x;
             const overlapRight = (block.x + block.width) - game.player.x;
             const overlapTop = (game.player.y + game.player.height) - block.y;
             const overlapBottom = (block.y + block.height) - game.player.y;
 
-            // Find the smallest overlap
             const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
 
-            // Resolve collision based on smallest overlap
-            if (minOverlap === overlapTop && game.player.velY > 0) {
-                game.player.y = block.y - game.player.height;
-                game.player.velY = 0;
-                game.player.isJumping = false;
-            }
-            else if (minOverlap === overlapBottom && game.player.velY < 0) {
+            if (minOverlap === overlapBottom && game.player.velY < 0) {
                 game.player.y = block.y + block.height;
                 game.player.velY = 0;
-            }
-            else if (minOverlap === overlapLeft) {
+                game.player.isJumping = false;
+            } else if (minOverlap === overlapTop && game.player.velY > 0) {
+                game.player.y = block.y - game.player.height;
+                game.player.velY = 0;
+            } else if (minOverlap === overlapLeft) {
                 game.player.x = block.x - game.player.width;
-            }
-            else if (minOverlap === overlapRight) {
+            } else if (minOverlap === overlapRight) {
                 game.player.x = block.x + block.width;
             }
         }
@@ -564,11 +682,11 @@ function addScreenShake(intensity, duration) {
 
 function initAudio() {
     if (game.audio.enabled) return;
-    
+
     try {
         game.audio.context = new (window.AudioContext || window.webkitAudioContext)();
         game.audio.enabled = true;
-        
+
         game.audio.sounds.jump = createSyntheticSound(220, 0.1, 'sine');
         game.audio.sounds.attack = createSyntheticSound(440, 0.15, 'square');
         game.audio.sounds.hit = createSyntheticSound(330, 0.1, 'triangle');
@@ -582,19 +700,19 @@ function initAudio() {
 function createSyntheticSound(frequency, duration, type = 'sine') {
     return () => {
         if (!game.audio.enabled || !game.audio.context) return;
-        
+
         const oscillator = game.audio.context.createOscillator();
         const gainNode = game.audio.context.createGain();
-        
+
         oscillator.connect(gainNode);
         gainNode.connect(game.audio.context.destination);
-        
+
         oscillator.frequency.setValueAtTime(frequency, game.audio.context.currentTime);
         oscillator.type = type;
-        
+
         gainNode.gain.setValueAtTime(0.3, game.audio.context.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, game.audio.context.currentTime + duration);
-        
+
         oscillator.start(game.audio.context.currentTime);
         oscillator.stop(game.audio.context.currentTime + duration);
     };
@@ -611,7 +729,7 @@ function updateEffects() {
         particle.update();
         return !particle.isDead();
     });
-    
+
     if (game.effects.screenShake.duration > 0) {
         game.effects.screenShake.x = (Math.random() - 0.5) * game.effects.screenShake.intensity;
         game.effects.screenShake.y = (Math.random() - 0.5) * game.effects.screenShake.intensity;
@@ -632,7 +750,7 @@ function attackWithMachete() {
         case 'up':
             attackBox = {
                 x: game.player.x,
-                y: game.player.y - attackRange,
+                y: game.player.y + game.player.height,
                 width: game.player.width,
                 height: attackRange
             };
@@ -640,7 +758,7 @@ function attackWithMachete() {
         case 'down':
             attackBox = {
                 x: game.player.x,
-                y: game.player.y + game.player.height,
+                y: game.player.y - attackRange,
                 width: game.player.width,
                 height: attackRange
             };
@@ -663,69 +781,36 @@ function attackWithMachete() {
             break;
     }
 
-    const initialBlockCount = game.blocks.length;
     const blocksBeforeAttack = game.blocks.length;
     let hitSomething = false;
 
-    // Check for destroyed blocks and create tooltips
     game.blocks.forEach(block => {
-        if (!block.destroyed && 
+        if (!block.destroyed &&
             attackBox.x < block.x + block.width &&
             attackBox.x + attackBox.width > block.x &&
             attackBox.y < block.y + block.height &&
             attackBox.y + attackBox.height > block.y) {
-            
+
             block.destroyed = true;
             block.destroyTime = Date.now();
             hitSomething = true;
-            
+
             const centerX = block.x + block.width / 2;
             const centerY = block.y + block.height / 2;
-            
+
             addSparkParticle(centerX, centerY, block.fill);
-            
-            for (let i = 0; i < 6; i++) {
-                const debris = new Particle(
-                    centerX + (Math.random() - 0.5) * block.width,
-                    centerY + (Math.random() - 0.5) * block.height,
-                    (Math.random() - 0.5) * 6,
-                    -Math.random() * 4 - 2,
-                    40 + Math.random() * 20,
-                    block.fill || '#ff7f00',
-                    3 + Math.random() * 4
-                );
-                game.effects.particles.push(debris);
-            }
-            
-            if (block.tooltipText) {
-                // Find similar positioned tooltips
-                const baseX = block.x + block.width / 2;
-                const baseY = block.y + block.height / 2;
-                
-                // Count existing tooltips in similar positions
-                const nearbyTooltips = game.activeTooltips.filter(t => {
-                    return Math.abs(t.baseX - baseX) < 100;  // Consider tooltips within 100px horizontally
-                }).length;
-                
-                game.activeTooltips.push({
-                    text: block.tooltipText,
-                    baseX: baseX,  // Store original x position
-                    baseY: baseY,  // Store original y position
-                    x: baseX,
-                    y: baseY - (nearbyTooltips * (game.tooltipConfig.baseHeight + game.tooltipConfig.verticalSpacing)),
-                    createdAt: Date.now(),
-                    opacity: 1
-                });
+
+            if (block.mesh) {
+                game.scene.remove(block.mesh);
             }
         }
     });
-    
+
     if (hitSomething) {
         addScreenShake(5, 8);
         playSound('hit');
     }
 
-    // Filter out destroyed blocks
     game.blocks = game.blocks.filter(block => !block.destroyed);
 
     game.destroyedBlocks += (blocksBeforeAttack - game.blocks.length);
@@ -737,325 +822,36 @@ function attackWithMachete() {
     }
 }
 
-function createAnimatedPlayerSprite(frame) {
-    const legOffset = Math.sin(frame * 0.5) * 2;
-    const armSwing = Math.sin(frame * 0.3) * 1;
-    
-    return `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
-    <!-- Head (Profile View) -->
-    <rect x="14" y="5" width="20" height="20" rx="4" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
-    <!-- Hair -->
-    <path d="M14 5 Q25 -5 34 8 Q34 10 28 8 Q24 9 14 10 Z" fill="#6b4423" stroke="#000" stroke-width="1.5"/>
-    <!-- Facial Features -->
-    <!-- Eye -->
-    <rect x="28" y="12" width="3" height="3" fill="#000"/>
-    <!-- Eyebrow -->
-    <path d="M28 10 Q30 8 32 10" stroke="#000" stroke-width="1.5" fill="none"/>
-    <!-- Nose -->
-    <path d="M32 14 Q35 15 32 17" stroke="#000" stroke-width="1.5" fill="none"/>
-    <!-- Mouth -->
-    <path d="M30 18 Q33 20 32 22" stroke="#000" stroke-width="1.5" fill="none"/>
-    <!-- Chin -->
-    <path d="M32 22 Q34 24 30 25" stroke="#000" stroke-width="1" fill="none"/>
-    <!-- Body (Sturdy and Bulky) -->
-    <rect x="18" y="25" width="14" height="20" fill="#3a79ff" stroke="#000" stroke-width="1.5"/>
-    <!-- Chest Definition -->
-    <path d="M19 26 Q25 22 31 26" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
-    <!-- Abs -->
-    <path d="M21 28 L21 40 M27 28 L27 40" stroke="#000" stroke-width="1"/>
-    <!-- Belt -->
-    <rect x="18" y="40" width="14" height="2" fill="#222" stroke="#000" stroke-width="1.5"/>
-    <!-- Animated Legs -->
-    <rect x="${20 + legOffset}" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
-    <rect x="${25 - legOffset}" y="42" width="5" height="8" fill="#555" stroke="#000" stroke-width="1.5"/>
-    <!-- Boots -->
-    <rect x="${20 + legOffset}" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
-    <rect x="${25 - legOffset}" y="48" width="5" height="3" fill="#222" stroke="#000" stroke-width="1.5"/>
-    <!-- Arms -->
-    <!-- Animated Front Arm -->
-    <rect x="${31 + armSwing}" y="${26 + armSwing}" width="6" height="10" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
-    <rect x="${31 + armSwing}" y="${34 + armSwing}" width="6" height="4" fill="#555" stroke="#000" stroke-width="1.5"/>
-    <!-- Animated Back Arm -->
-    <path d="M${18 - armSwing} ${26 - armSwing} Q${15 - armSwing} ${30 - armSwing} ${18 - armSwing} ${36 - armSwing}" fill="#f4c7a3" stroke="#000" stroke-width="1.5"/>
-    <path d="M${16 - armSwing} ${34 - armSwing} Q${16 - armSwing} ${36 - armSwing} ${18 - armSwing} ${38 - armSwing}" fill="#555" stroke="#000" stroke-width="1.5"/>
-</svg>
-`;
-}
-
-const playerSpriteSVG = createAnimatedPlayerSprite(0);
-
-const playerSprite = new Image();
-playerSprite.src = 'data:image/svg+xml;base64,' + btoa(playerSpriteSVG);
-
-playerSprite.onload = function () {
-    game.startRendering();
-};
-
-const macheteSlashSVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
-  <!-- Wooden Handle -->
-  <path d="M50 95 L120 95 L120 105 L50 105 Z" 
-        fill="#8B4513" 
-        stroke="#654321" 
-        stroke-width="1"/>
-  
-  <!-- Handle Detail -->
-  <path d="M60 95 L70 95 L70 105 L60 105" 
-        fill="#A0522D" 
-        stroke="none"/>
-  <path d="M80 95 L90 95 L90 105 L80 105" 
-        fill="#A0522D" 
-        stroke="none"/>
-  <path d="M100 95 L110 95 L110 105 L100 105" 
-        fill="#A0522D" 
-        stroke="none"/>
-        
-  <!-- Blade -->
-  <path d="M120 90 L350 70 L360 80 L370 100 L350 110 L120 110 Z" 
-        fill="#D3D3D3" 
-        stroke="#A9A9A9" 
-        stroke-width="1"/>
-  
-  <!-- Blade Edge -->
-  <path d="M120 90 L350 70 L360 80" 
-        fill="none" 
-        stroke="#808080" 
-        stroke-width="2"/>
-  
-  <!-- Shine/Gleam Effects -->
-  <path d="M150 85 L300 75" 
-        stroke="white" 
-        stroke-width="3" 
-        opacity="0.6"/>
-  <path d="M160 95 L290 87" 
-        stroke="white" 
-        stroke-width="2" 
-        opacity="0.4"/>
-  
-  <!-- Blade Tip -->
-  <path d="M350 70 L360 80 L370 100" 
-        fill="none" 
-        stroke="#666666" 
-        stroke-width="1.5"/>
-</svg>
-`;
-
-const macheteSlashImage = new Image();
-macheteSlashImage.src = 'data:image/svg+xml;base64,' + btoa(macheteSlashSVG);
-
-macheteSlashImage.onload = function () {
-    game.startRendering();
-};
-
 function render() {
-    const ctx = game.ctx;
-    ctx.save();
-    
-    ctx.translate(game.effects.screenShake.x, game.effects.screenShake.y);
-    
-    ctx.clearRect(-10, -10, ctx.canvas.width + 20, ctx.canvas.height + 20);
+    if (!game.renderer || !game.scene || !game.camera) return;
 
-    if (game.effects.backgroundGradient) {
-        const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-        gradient.addColorStop(0, '#1a1a2e');
-        gradient.addColorStop(0.5, '#16213e');
-        gradient.addColorStop(1, '#0f0f0f');
-        ctx.fillStyle = gradient;
-    } else {
-        ctx.fillStyle = '#f0f0f0';
-    }
-    ctx.fillRect(-10, -10, ctx.canvas.width + 20, ctx.canvas.height + 20);
-    
-    if (game.effects.lighting.enabled) {
-        const lightGradient = ctx.createRadialGradient(
-            game.effects.lighting.mouseX, game.effects.lighting.mouseY, 0,
-            game.effects.lighting.mouseX, game.effects.lighting.mouseY, 200
-        );
-        lightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
-        lightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = lightGradient;
-        ctx.fillRect(-10, -10, ctx.canvas.width + 20, ctx.canvas.height + 20);
+    const playerCenterX = game.player.x + game.player.width / 2;
+    const playerCenterY = game.player.y + game.player.height / 2;
+
+    if (game.playerMesh) {
+        game.playerMesh.position.set(playerCenterX, playerCenterY, 0);
+        const tilt = game.player.facingRight ? -0.05 : 0.05;
+        game.playerMesh.rotation.y = tilt;
     }
 
-    const floorGradient = ctx.createLinearGradient(0, ctx.canvas.height - 10, 0, ctx.canvas.height);
-    floorGradient.addColorStop(0, '#444');
-    floorGradient.addColorStop(1, '#222');
-    ctx.fillStyle = floorGradient;
-    ctx.fillRect(0, ctx.canvas.height - 10, ctx.canvas.width, 10);
-
-    // Render blocks with enhanced visuals
-    game.blocks.forEach(block => {
-        if (game.effects.shadows) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.fillRect(block.x + 2, block.y + 2, block.width, block.height);
-        }
-        
-        ctx.fillStyle = block.fill || '#ff7f00';
-        ctx.fillRect(block.x, block.y, block.width, block.height);
-        
-        const blockGradient = ctx.createLinearGradient(block.x, block.y, block.x, block.y + block.height);
-        const baseColor = block.fill || '#ff7f00';
-        blockGradient.addColorStop(0, baseColor);
-        blockGradient.addColorStop(1, darkenColor(baseColor, 0.3));
-        ctx.fillStyle = blockGradient;
-        ctx.fillRect(block.x, block.y, block.width, block.height);
-
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(block.x, block.y, block.width, block.height);
-        
-        const highlight = ctx.createLinearGradient(block.x, block.y, block.x, block.y + 3);
-        highlight.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
-        highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = highlight;
-        ctx.fillRect(block.x, block.y, block.width, 3);
-    });
-    
-    // Render particles
-    game.effects.particles.forEach(particle => {
-        particle.render(ctx);
-    });
-
-    // Render active tooltips
-    const currentTime = Date.now();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Sort tooltips by y position for proper layering
-    game.activeTooltips.sort((a, b) => a.y - b.y);
-    
-    game.activeTooltips = game.activeTooltips.filter(tooltip => {
-        const age = currentTime - tooltip.createdAt;
-        if (age > 1000) { // 1 second display time
-            tooltip.opacity = 1 - (age - 1000) / 500; // 500ms fade out
-        }
-        
-        if (tooltip.opacity <= 0) return false;
-
-        // Draw tooltip with shadow for better visibility
-        ctx.font = '14px Arial';
-        ctx.shadowColor = 'white';
-        ctx.shadowBlur = 4;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'white';
-        ctx.strokeText(tooltip.text, tooltip.x, tooltip.y);
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = `rgba(0, 0, 0, ${tooltip.opacity})`;
-        ctx.fillText(tooltip.text, tooltip.x, tooltip.y);
-        
-        return tooltip.opacity > 0;
-    });
-
-    // Render player shadow
-    if (game.effects.shadows) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(
-            game.player.x + game.player.width/2 + 1,
-            game.player.y + game.player.height + 5,
-            game.player.width/2, 4, 0, 0, Math.PI * 2
-        );
-        ctx.fill();
+    if (game.lights && game.lights.pointLight) {
+        game.lights.pointLight.position.set(playerCenterX + 40, playerCenterY + 80, 120);
     }
 
-    // Create animated sprite for current frame
-    const animatedSprite = new Image();
-    animatedSprite.src = 'data:image/svg+xml;base64,' + btoa(createAnimatedPlayerSprite(game.player.animFrame));
-    
-    // Render player
-    ctx.save();
-    if (!game.player.facingRight) {
-        ctx.translate(game.player.x + game.player.width, game.player.y);
-        ctx.scale(-1, 1);
-        if (animatedSprite.complete) {
-            ctx.drawImage(animatedSprite, 0, 0, game.player.width, game.player.height);
-        } else {
-            ctx.drawImage(playerSprite, 0, 0, game.player.width, game.player.height);
-        }
-    } else {
-        if (animatedSprite.complete) {
-            ctx.drawImage(animatedSprite, game.player.x, game.player.y, game.player.width, game.player.height);
-        } else {
-            ctx.drawImage(playerSprite, game.player.x, game.player.y, game.player.width, game.player.height);
-        }
+    if (game.effects.screenShake.duration > 0) {
+        const shakeX = game.effects.screenShake.x;
+        const shakeY = game.effects.screenShake.y;
+        const shakeZ = game.effects.screenShake.x * 0.6;
+        game.camera.position.x += shakeX;
+        game.camera.position.y += shakeY;
+        game.camera.position.z += shakeZ;
+        game.camera.lookAt(new THREE.Vector3(game.world.width * 0.5, game.world.height * 0.45, 0));
+        game.camera.position.x -= shakeX;
+        game.camera.position.y -= shakeY;
+        game.camera.position.z -= shakeZ;
     }
-    ctx.restore();
-    
-    // Add subtle glow around player
-    ctx.save();
-    ctx.shadowColor = '#ffaa00';
-    ctx.shadowBlur = game.player.isAttacking ? 15 : 5;
-    ctx.globalAlpha = 0.6;
-    if (!game.player.facingRight) {
-        ctx.translate(game.player.x + game.player.width, game.player.y);
-        ctx.scale(-1, 1);
-        if (animatedSprite.complete) {
-            ctx.drawImage(animatedSprite, 0, 0, game.player.width, game.player.height);
-        } else {
-            ctx.drawImage(playerSprite, 0, 0, game.player.width, game.player.height);
-        }
-    } else {
-        if (animatedSprite.complete) {
-            ctx.drawImage(animatedSprite, game.player.x, game.player.y, game.player.width, game.player.height);
-        } else {
-            ctx.drawImage(playerSprite, game.player.x, game.player.y, game.player.width, game.player.height);
-        }
-    }
-    ctx.restore();
 
-    // Render machete slash
-    if (game.player.isAttacking) {
-        ctx.save();
-
-        const tileSize = 50;
-        let slashX = game.player.x;
-        let slashY = game.player.y;
-        let rotation = 0;
-
-        switch (game.player.attackDirection) {
-            case 'right':
-                slashX += game.player.width;
-                rotation = 0;
-                break;
-            case 'left':
-                slashX -= tileSize;
-                rotation = Math.PI;
-                break;
-            case 'up':
-                slashY -= tileSize;
-                rotation = -Math.PI / 2;
-                break;
-            case 'down':
-                slashY += game.player.height;
-                rotation = Math.PI / 2;
-                break;
-        }
-
-        ctx.translate(slashX + tileSize / 2, slashY + tileSize / 2);
-        ctx.rotate(rotation);
-
-        ctx.save();
-        ctx.shadowColor = '#ffaa00';
-        ctx.shadowBlur = 10;
-        ctx.globalAlpha = 0.9;
-        ctx.drawImage(macheteSlashImage, -tileSize / 2, -tileSize / 2, tileSize, tileSize / 3);
-        ctx.restore();
-
-        ctx.restore();
-    }
-    
-    ctx.restore();
-}
-
-function darkenColor(color, factor) {
-    if (color.startsWith('#')) {
-        const r = parseInt(color.substr(1, 2), 16);
-        const g = parseInt(color.substr(3, 2), 16);
-        const b = parseInt(color.substr(5, 2), 16);
-        return `rgb(${Math.floor(r * (1 - factor))}, ${Math.floor(g * (1 - factor))}, ${Math.floor(b * (1 - factor))})`;
-    }
-    return color;
+    game.renderer.render(game.scene, game.camera);
 }
 
 function updateTimer() {
@@ -1068,7 +864,7 @@ function updateTimer() {
 function startGame() {
     game.isRunning = true;
     game.startTime = Date.now();
-    
+
     initAudio();
 
     game.player.x = 50;
@@ -1084,7 +880,6 @@ function resetGame() {
     game.isRunning = false;
     game.levelComplete = false;
 
-    // Remove level complete message if it exists
     const completeMessage = document.querySelector('.level-complete');
     if (completeMessage) {
         completeMessage.remove();
